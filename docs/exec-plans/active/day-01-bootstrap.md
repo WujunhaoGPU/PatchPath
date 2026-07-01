@@ -12,6 +12,7 @@ Create the repository skeleton and lock the product positioning before implement
 - `docs/index.md`
 - `docs/project-map.md`
 - `docs/product-specs/mvp.md`
+- `docs/design-docs/agent-runtime-choice.md`
 - `scripts/check-docs.sh`
 
 ## Tasks
@@ -19,8 +20,9 @@ Create the repository skeleton and lock the product positioning before implement
 - [x] Define product positioning.
 - [x] Document MVP scope and non-goals.
 - [x] Add project map and repository rules.
-- [ ] Create `docs/eval-set-v0.md` with 5 real issues.
+- [x] Accept the first Agent runtime architecture.
 - [ ] Build the first CLI proof for one issue.
+- [ ] Create lightweight review notes from the first generated brief.
 
 ## Verification
 
@@ -30,4 +32,4 @@ Create the repository skeleton and lock the product positioning before implement
 
 ## Current Status
 
-Bootstrap complete after docs check passes.
+Bootstrap docs are complete. Next work is the first vertical slice: generate one contribution brief and trace from a real issue.

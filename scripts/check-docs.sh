@@ -9,6 +9,7 @@ required=(
   "docs/project-map.md"
   "docs/product-specs/mvp.md"
   "docs/design-docs/index.md"
+  "docs/design-docs/agent-runtime-choice.md"
   "docs/exec-plans/active/day-01-bootstrap.md"
   "docs/exec-plans/tech-debt-tracker.md"
   "docs/core-beliefs.md"
