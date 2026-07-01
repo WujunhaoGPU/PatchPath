@@ -50,10 +50,10 @@ repo + issue
 
 ## Current Architecture Status
 
-Status: runtime architecture accepted. V1 Tool Execution state is `rg + heuristics` as the default path, with `rg + CodeGraph` as an optional enhancement when a local CodeGraph index is available. No product code yet.
+Status: runtime architecture accepted and M1 CLI implemented. V1 Tool Execution state is `rg + heuristics` as the default path, with `rg + CodeGraph` as an optional enhancement when a local CodeGraph index is available.
 
 ## First Validation
 
-Build the smallest CLI that runs one real issue through `Plan -> Retrieve -> Inspect -> Brief -> Guard` and writes `brief.md` plus `trace.jsonl`.
+The smallest CLI runs real issues through `Plan -> Retrieve -> Inspect -> Brief -> Guard` and writes `brief.md` plus `trace.jsonl`. Current M1 validation on `pallets/click` puts 5/5 gold source files in Top-5.
 
 Related design: `docs/design-docs/agent-runtime-choice.md`.

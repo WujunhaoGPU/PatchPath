@@ -26,9 +26,12 @@ Run:
 
 ```bash
 ./scripts/check-docs.sh
+pytest
+patchpath analyze --repo <local-repo-path> --issue <owner/repo#number>
 ```
 
-When product code exists, add the smallest runnable test command to `docs/project-map.md` and this file.
+Use `--offline` only when GitHub issue fetching is unavailable and the issue is
+covered by a real fixture from `docs/eval-set-v0.md`.
 
 ## Rules
 

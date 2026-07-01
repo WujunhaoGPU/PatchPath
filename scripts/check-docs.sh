@@ -5,6 +5,8 @@ required=(
   "README.md"
   "AGENTS.md"
   "ARCHITECTURE.md"
+  "pyproject.toml"
+  "uv.lock"
   "docs/index.md"
   "docs/project-map.md"
   "docs/product-specs/mvp.md"
@@ -16,6 +18,9 @@ required=(
   "docs/exec-plans/tech-debt-tracker.md"
   "docs/core-beliefs.md"
   "docs/quality-scorecard.md"
+  "docs/reviews/m1-click-3502-brief.md"
+  "src/patchpath/cli.py"
+  "tests/test_m1_cli.py"
 )
 
 for path in "${required[@]}"; do

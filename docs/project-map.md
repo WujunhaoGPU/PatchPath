@@ -6,28 +6,24 @@ PatchPath helps human contributors understand open source issues and produce sma
 
 ## Runtime Entry
 
-No runtime entry yet.
-
-Planned CLI:
+CLI:
 
 ```bash
-issue-agent analyze --repo <repo-url> --issue <issue-url>
+patchpath analyze --repo <local-repo-path> --issue <github-issue-url-or-owner/repo#number>
 ```
 
 ## Main Modules
 
-Planned:
-
-- `src/ingestion/`
-- `src/retrieval/`: V1 default is `rg + heuristics`; optional enhancement is `rg + CodeGraph`.
-- `src/analysis/`
-- `src/evaluation/`
-- `src/presentation/`
+- `src/patchpath/cli.py`: M1 CLI, issue intake, `rg + heuristics` retrieval,
+  brief rendering, and JSONL trace writing.
+- `tests/test_m1_cli.py`: minimal M1 behavior checks.
 
 ## Common Commands
 
 ```bash
 ./scripts/check-docs.sh
+pytest
+patchpath analyze --repo <local-repo-path> --issue <owner/repo#number>
 ```
 
 ## Test And Acceptance Commands
@@ -36,13 +32,13 @@ Current:
 
 ```bash
 ./scripts/check-docs.sh
+pytest
 ```
 
-Future:
+Manual CLI smoke:
 
 ```bash
-pytest
-issue-agent analyze --repo <repo-url> --issue <issue-url>
+patchpath analyze --repo ../click --issue pallets/click#3502
 ```
 
 ## Known Risks
@@ -53,4 +49,5 @@ issue-agent analyze --repo <repo-url> --issue <issue-url>
 
 ## Next Handoff
 
-Read `docs/eval-set-v0.md` and `docs/design-docs/tool-execution-retrieval-experiment.md`, then use the eval set to drive the first CLI retrieval slice.
+Run the five issues in `docs/eval-set-v0.md` against a local `pallets/click`
+checkout and confirm at least 4/5 gold source files appear in Top-5.

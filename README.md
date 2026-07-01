@@ -82,19 +82,22 @@
 
 ## Current Status
 
-Status: retrieval design accepted
+Status: M1 CLI vertical slice verified
 
 已完成：
 
 - 接受 `Plan -> Retrieve -> Inspect -> Brief -> Guard` Agent runtime。
 - 建立 `docs/eval-set-v0.md`，包含 5 个 `pallets/click` gold issues。
 - 完成 Tool Execution retrieval 实验：V1 默认 `rg + heuristics`，CodeGraph 作为 optional provider。
-
-下一步是实现最小 CLI：
+- 实现最小 CLI：
 
 ```text
 patchpath analyze --repo <repo-url-or-path> --issue <issue-url-or-number>
 ```
+
+- 在本地 `pallets/click` checkout 上跑通 5 个真实 issue，5/5 gold source files 进入 Top-5。
+
+下一步是增加跨仓库 eval，不要先扩大到自动 patch 或 Web UI。
 
 ## Project Map
 
@@ -106,11 +109,21 @@ patchpath analyze --repo <repo-url-or-path> --issue <issue-url-or-number>
 - [docs/eval-set-v0.md](docs/eval-set-v0.md): 第一组真实 issue 样本。
 - [docs/design-docs/tool-execution-retrieval-experiment.md](docs/design-docs/tool-execution-retrieval-experiment.md): Tool Execution 检索实验。
 - [docs/exec-plans/active/day-01-bootstrap.md](docs/exec-plans/active/day-01-bootstrap.md): 当前执行计划。
+- [docs/reviews/m1-click-3502-brief.md](docs/reviews/m1-click-3502-brief.md): 第一份生成 brief 的轻量 review。
 
 ## Verification
 
-当前仓库还没有产品代码。先用文档健康检查验证初始化质量：
+Setup:
+
+```bash
+uv sync --extra dev
+source .venv/bin/activate
+```
+
+Checks:
 
 ```bash
 ./scripts/check-docs.sh
+pytest
+patchpath analyze --repo ../click --issue pallets/click#3502
 ```

@@ -2,7 +2,9 @@
 
 ## Current Status
 
-Bootstrap. The product direction is defined; implementation has not started.
+M1 CLI vertical slice verified. Product direction and V1 retrieval design are
+defined; `patchpath analyze` generates `brief.md` and `trace.jsonl` for real
+issues.
 
 ## Core Entry
 
@@ -35,5 +37,9 @@ Bootstrap. The product direction is defined; implementation has not started.
 ## Verification
 
 ```bash
+uv sync --extra dev
+source .venv/bin/activate
 ./scripts/check-docs.sh
+pytest
+patchpath analyze --repo ../click --issue pallets/click#3502
 ```

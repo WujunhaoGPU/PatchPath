@@ -25,15 +25,18 @@ Create the repository skeleton and lock the product positioning before implement
 - [x] Accept the first Agent runtime architecture.
 - [x] Create `docs/eval-set-v0.md` with 5 real issues.
 - [x] Accept Tool Execution V1 retrieval strategy: default `rg + heuristics`, optional `rg + CodeGraph`.
-- [ ] Build the first CLI proof for one issue.
-- [ ] Create lightweight review notes from the first generated brief.
+- [x] Build the first CLI proof for one issue.
+- [x] Create lightweight review notes from the first generated brief.
 
 ## Verification
 
 ```bash
 ./scripts/check-docs.sh
+pytest
+patchpath analyze --repo ../click --issue pallets/click#3502
 ```
 
 ## Current Status
 
-Bootstrap and retrieval-design docs are complete. Next work is the first vertical slice: run `patchpath analyze` against one real issue and generate `brief.md` plus `trace.jsonl`.
+Bootstrap, retrieval-design docs, and the first CLI vertical slice are complete.
+Next work is cross-repo eval expansion before changing the runtime shape.
