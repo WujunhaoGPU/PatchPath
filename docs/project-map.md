@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-GitHub Issue Agent helps human contributors understand open source issues and produce small, well-scoped contribution plans.
+PatchPath helps human contributors understand open source issues and produce small, well-scoped contribution plans.
 
 ## Runtime Entry
 

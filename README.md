@@ -1,4 +1,4 @@
-# GitHub Issue Agent
+# PatchPath
 
 帮助想参与开源项目的人更快理解 issue、定位代码、写出更容易被接受的 PR。
 
