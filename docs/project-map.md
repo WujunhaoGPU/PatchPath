@@ -19,7 +19,7 @@ issue-agent analyze --repo <repo-url> --issue <issue-url>
 Planned:
 
 - `src/ingestion/`
-- `src/retrieval/`
+- `src/retrieval/`: V1 default is `rg + heuristics`; optional enhancement is `rg + CodeGraph`.
 - `src/analysis/`
 - `src/evaluation/`
 - `src/presentation/`
@@ -53,4 +53,4 @@ issue-agent analyze --repo <repo-url> --issue <issue-url>
 
 ## Next Handoff
 
-Read `docs/product-specs/mvp.md`, then fill `docs/eval-set-v0.md` with 5 real issues.
+Read `docs/eval-set-v0.md` and `docs/design-docs/tool-execution-retrieval-experiment.md`, then use the eval set to drive the first CLI retrieval slice.
