@@ -116,6 +116,8 @@ Input:
 Output:
 
 - `rg` matches
+- heuristic ranking signals
+- optional CodeGraph symbol and relationship results
 - candidate files
 - candidate snippets
 - detected test commands
@@ -127,8 +129,16 @@ Tools:
 - filesystem reads
 - `git`
 - package metadata inspection
+- optional CodeGraph CLI or MCP query
 
 Rule: this is the only node that claims file evidence.
+
+V1 state:
+
+- Default path: `rg + heuristics`.
+- Optional enhancement: `rg + CodeGraph` when CodeGraph is installed and the repo has a usable local index.
+- Fallback: if CodeGraph is missing, stale, unsupported, or returns no useful result, continue with `rg + heuristics`.
+- Evidence rule: CodeGraph can boost or expand candidate files, but every Top-K recommendation still needs traceable evidence.
 
 ### Evidence Ranking
 
@@ -224,6 +234,8 @@ Every run should record:
 - output summary
 - evidence paths
 - warnings
+- provider: `rg`, `heuristics`, or `codegraph`
+- fallback reason when an optional provider is skipped
 
 Trace file:
 
@@ -275,6 +287,7 @@ Acceptance:
 - creates `trace.jsonl`
 - brief includes all required sections
 - every Top-K file has evidence
+- retrieval uses `rg + heuristics`, with optional CodeGraph boosting when available
 - user can decide one next action after reading the brief
 
 ## Re-evaluation Conditions

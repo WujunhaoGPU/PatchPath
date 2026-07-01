@@ -18,6 +18,11 @@ Bootstrap. The product direction is defined; implementation has not started.
 ## Design Docs
 
 - `docs/design-docs/index.md`
+- `docs/design-docs/tool-execution-retrieval-experiment.md`
+
+## Evaluation
+
+- `docs/eval-set-v0.md`
 
 ## Active Plans
 

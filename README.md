@@ -82,12 +82,18 @@
 
 ## Current Status
 
-Status: bootstrap
+Status: retrieval design accepted
 
-下一步是建立 5 个真实 issue 的 gold set，然后实现最小 CLI：
+已完成：
+
+- 接受 `Plan -> Retrieve -> Inspect -> Brief -> Guard` Agent runtime。
+- 建立 `docs/eval-set-v0.md`，包含 5 个 `pallets/click` gold issues。
+- 完成 Tool Execution retrieval 实验：V1 默认 `rg + heuristics`，CodeGraph 作为 optional provider。
+
+下一步是实现最小 CLI：
 
 ```text
-issue-agent analyze --repo <repo-url> --issue <issue-url>
+patchpath analyze --repo <repo-url-or-path> --issue <issue-url-or-number>
 ```
 
 ## Project Map
@@ -97,6 +103,8 @@ issue-agent analyze --repo <repo-url> --issue <issue-url>
 - [docs/index.md](docs/index.md): 文档入口。
 - [docs/project-map.md](docs/project-map.md): 代码和验证地图。
 - [docs/product-specs/mvp.md](docs/product-specs/mvp.md): MVP 产品规格。
+- [docs/eval-set-v0.md](docs/eval-set-v0.md): 第一组真实 issue 样本。
+- [docs/design-docs/tool-execution-retrieval-experiment.md](docs/design-docs/tool-execution-retrieval-experiment.md): Tool Execution 检索实验。
 - [docs/exec-plans/active/day-01-bootstrap.md](docs/exec-plans/active/day-01-bootstrap.md): 当前执行计划。
 
 ## Verification

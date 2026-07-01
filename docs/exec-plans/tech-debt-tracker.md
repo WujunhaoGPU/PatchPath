@@ -6,5 +6,5 @@ No code debt yet.
 
 | Item | Type | Impact | Next Step | Status |
 | --- | --- | --- | --- | --- |
-| No eval set | product/test | Cannot judge output quality | Create `docs/eval-set-v0.md` with 5 issues | open |
+| Eval set is single-repo only | product/test | Retrieval result may not generalize beyond `pallets/click` | Add cross-repo issues before making CodeGraph mandatory | open |
 | No CLI proof | tech | Cannot validate workflow | Implement one-command analysis for one issue | open |

@@ -7,7 +7,7 @@ Given a GitHub repo and issue, produce an evidence-backed contribution brief for
 ## Planned Layers
 
 - `ingestion`: fetch issue, comments, repo metadata, and local repository files.
-- `retrieval`: find candidate files and snippets with simple searchable methods first.
+- `retrieval`: find candidate files and snippets with `rg + heuristics`, then optionally boost with CodeGraph symbol evidence.
 - `evidence`: store snippets, file paths, ranking reasons, and trace entries.
 - `analysis`: summarize issue state, missing information, risks, and contribution path.
 - `guard`: reject or warn on unsupported recommendations.
@@ -22,7 +22,7 @@ PatchPath uses an evidence-first workflow agent:
 Plan -> Retrieve -> Inspect -> Brief -> Guard
 ```
 
-This is a fixed workflow, not a multi-agent crew. LLM calls are limited to problem framing, search planning, contribution brief writing, and optional guard review. File evidence must come from deterministic tools such as `rg`, filesystem reads, `git`, and GitHub metadata.
+This is a fixed workflow, not a multi-agent crew. LLM calls are limited to problem framing, search planning, contribution brief writing, and optional guard review. File evidence must come from deterministic tools such as `rg`, filesystem reads, `git`, GitHub metadata, package metadata, and optional CodeGraph queries.
 
 ## Dependency Direction
 
@@ -50,7 +50,7 @@ repo + issue
 
 ## Current Architecture Status
 
-Status: runtime architecture accepted. No product code yet.
+Status: runtime architecture accepted. V1 Tool Execution state is `rg + heuristics` as the default path, with `rg + CodeGraph` as an optional enhancement when a local CodeGraph index is available. No product code yet.
 
 ## First Validation
 
