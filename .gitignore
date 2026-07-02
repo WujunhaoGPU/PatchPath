@@ -1,4 +1,5 @@
 .DS_Store
+.codegraph/
 .patchpath/
 __pycache__/
 .pytest_cache/

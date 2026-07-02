@@ -5,6 +5,7 @@ required=(
   "README.md"
   "AGENTS.md"
   "ARCHITECTURE.md"
+  ".env.example"
   "pyproject.toml"
   "uv.lock"
   "docs/index.md"

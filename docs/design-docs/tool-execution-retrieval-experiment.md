@@ -1,6 +1,6 @@
 # Tool Execution Retrieval Experiment
 
-Status: accepted for V1 Tool Execution
+Status: accepted for V1 Tool Execution; promoted to default CodeGraph boost
 Date: 2026-07-01
 Related eval set: `docs/eval-set-v0.md`
 
@@ -71,24 +71,26 @@ These are the output-facing artifacts the best run could produce for the brief.
 
 ## Recommendation
 
-Implement Tool Execution V1 with two active states:
+Original recommendation was two active states:
 
 - Default state: `rg + heuristics`.
 - Enhanced state: `rg + CodeGraph`, enabled when CodeGraph is available for the
   target repo.
 
+Current product decision: use `rg + CodeGraph + heuristics` by default, with a
+recorded fallback to `rg + heuristics` when CodeGraph is unavailable.
+
 ```text
 rg text evidence
 -> heuristic ranking
--> optional CodeGraph symbol expansion
+-> default CodeGraph symbol expansion when available
 -> merged candidate files and snippets
 -> trace with provider, query, result count, selected paths, warnings
 ```
 
-Do not make CodeGraph mandatory for MVP. It is part of the V1 design as an
-optional enhancement, not a hard dependency. Fall back cleanly to
-`rg + heuristics` when it is missing, stale, or unsupported for the target
-language.
+Do not make CodeGraph a run-blocking dependency for MVP. It is part of the V1
+default retrieval path, but the CLI must fall back cleanly to `rg + heuristics`
+when it is missing, stale, or unsupported for the target language.
 
 ## Trace Fields To Keep
 
