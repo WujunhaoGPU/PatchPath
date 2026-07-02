@@ -13,6 +13,33 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+TEXT_FRAME_FIELDS = (
+    "project_summary",
+    "issue_summary",
+    "issue_breakdown",
+    "clarity",
+    "suitability",
+    "maintainer_draft",
+)
+LIST_FRAME_FIELDS = (
+    "structure_map",
+    "reading_order",
+    "change_points",
+    "impact_risks",
+    "validation_plan",
+    "test_result_interpretation",
+    "ability_takeaways",
+)
+GROUNDED_FRAME_FIELDS = (
+    "reading_order",
+    "change_points",
+    "impact_risks",
+    "validation_plan",
+    "test_result_interpretation",
+    "maintainer_draft",
+)
+
+
 EVAL_FIXTURES: dict[str, dict[str, Any]] = {
     "pallets/click#3502": {
         "title": "fish completion is broken in 8.4.1",
@@ -185,8 +212,10 @@ def build_brief_frame(
     llm_client: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     fallback = template_brief_frame(repo_path, issue_context, related_files)
+    project_structure = build_project_structure(repo_path)
     payload = {
         "project_summary": fallback["project_summary"],
+        "project_structure": project_structure,
         "issue_title": issue_context["title"],
         "issue_state": issue_context.get("state", "unknown"),
         "issue_body": issue_context.get("body", "")[:4000],
@@ -259,28 +288,49 @@ def template_brief_frame(
     return {
         "project_summary": read_project_summary(repo_path),
         "issue_summary": issue_context["title"],
+        "issue_breakdown": "先确认 issue 现象、预期行为、复现条件和已有证据，再决定是否值得继续。",
         "clarity": clarity,
         "suitability": suitability,
+        "maintainer_draft": (
+            "我会先按当前 evidence 阅读相关文件并验证复现路径；如果缺少版本、环境或预期行为，"
+            "会先向 maintainer 补问这些信息。"
+        ),
+        "structure_map": build_project_structure(repo_path),
         "reading_order": [item["path"] for item in related_files[:5]],
         "change_points": [
             f"{item['path']}: {item['evidence'][0]['term']}" for item in related_files[:5]
+        ],
+        "impact_risks": [
+            "修改前先检查 Top-K 文件的调用关系、相邻测试和兼容性边界。"
+        ],
+        "validation_plan": [
+            issue_context.get("validation")
+            or "先运行相关测试；如果没有明确测试，先阅读项目测试说明并补最小复现。"
+        ],
+        "test_result_interpretation": [
+            "测试通过只说明当前断言覆盖的行为没有坏；测试失败要回到 evidence 判断是定位错、复现错还是边界没覆盖。"
+        ],
+        "ability_takeaways": [
+            "训练陌生项目阅读、issue 拆解、证据定位、影响分析、验证设计和维护者沟通。"
         ],
     }
 
 
 def normalize_brief_frame(frame: dict[str, Any]) -> dict[str, Any]:
-    required_text = ("project_summary", "issue_summary", "clarity", "suitability")
-    required_lists = ("reading_order", "change_points")
-    required = required_text + required_lists
-    missing = [key for key in required if not str(frame.get(key, "")).strip()]
+    missing = [key for key in TEXT_FRAME_FIELDS if not str(frame.get(key, "")).strip()]
+    missing.extend(
+        key
+        for key in LIST_FRAME_FIELDS
+        if key not in frame or not normalize_text_list(frame[key], key)
+    )
     if missing:
         raise ValueError(f"LLM frame missing fields: {', '.join(missing)}")
 
     normalized: dict[str, Any] = {}
-    for key in required_text:
+    for key in TEXT_FRAME_FIELDS:
         value = str(frame.get(key, "")).strip()
         normalized[key] = compact_text(value)
-    for key in required_lists:
+    for key in LIST_FRAME_FIELDS:
         normalized[key] = normalize_text_list(frame[key], key)
     return normalized
 
@@ -307,7 +357,14 @@ def validate_brief_frame_grounding(
     allowed_evidence_ids = {
         evidence["id"] for item in top for evidence in item["evidence"][:3]
     }
-    generated_text = "\n".join(frame["reading_order"] + frame["change_points"])
+    generated_parts: list[str] = []
+    for key in GROUNDED_FRAME_FIELDS:
+        value = frame[key]
+        if isinstance(value, list):
+            generated_parts.extend(value)
+        else:
+            generated_parts.append(str(value))
+    generated_text = "\n".join(generated_parts)
     referenced_paths = extract_path_references(generated_text)
     unknown_paths = sorted(referenced_paths - allowed_paths)
     if unknown_paths:
@@ -338,16 +395,19 @@ def call_deepseek_frame(
     api_key: str,
     model: str,
     payload: dict[str, Any],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     prompt = (
-        "请基于真实 issue 和文件证据，生成四个简短中文字段。"
-        "要求：通俗易懂，不冗余；不要编造文件、复现步骤或修复方案；"
+        "请基于真实 issue、项目结构和文件证据，生成一份 guided contribution training session。"
+        "要求：通俗易懂，不冗余；用教练口吻解释为什么这么读、怎么判断、怎么验证；"
+        "不要编造文件、复现步骤或修复方案；"
         "如果 issue_state 是 closed，要说明它不适合作为当前贡献，只适合学习、复盘或回归验证；"
-        "推荐阅读顺序和可能修改点只能基于 related_files 里的路径和 evidence；"
-        "不要输出 related_files 之外的文件。"
-        "四个说明字段最多两句话，reading_order 和 change_points 各输出 2-5 条。"
-        "只输出 JSON，字段为 project_summary, issue_summary, clarity, suitability, "
-        "reading_order, change_points。\n\n"
+        "凡是推荐阅读、修改、风险、验证和沟通中出现的代码文件，只能来自 related_files；"
+        "如需引用证据，只能使用 related_files 中已有 evidence id。"
+        "text 字段最多两句话，list 字段各输出 2-5 条。"
+        "只输出 JSON，text 字段为 project_summary, issue_summary, issue_breakdown, "
+        "clarity, suitability, maintainer_draft；list 字段为 structure_map, reading_order, "
+        "change_points, impact_risks, validation_plan, test_result_interpretation, "
+        "ability_takeaways。\n\n"
         + json.dumps(payload, ensure_ascii=False)
     )
     body = json.dumps(
@@ -356,7 +416,10 @@ def call_deepseek_frame(
             "messages": [
                 {
                     "role": "system",
-                    "content": "You write concise Chinese contribution briefs grounded in evidence.",
+                    "content": (
+                        "You write concise Chinese guided contribution training sessions "
+                        "grounded in repository and issue evidence."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -803,7 +866,7 @@ def render_brief(
     issue_key: str,
     issue_context: dict[str, Any],
     related_files: list[dict[str, Any]],
-    brief_frame: dict[str, str],
+    brief_frame: dict[str, Any],
     terms: list[str],
     warnings: list[str],
 ) -> str:
@@ -811,22 +874,36 @@ def render_brief(
     validation = issue_context.get("validation") or detect_validation(top)
 
     lines = [
-        f"# PatchPath Brief: {issue_key}",
+        f"# PatchPath 开源贡献训练单: {issue_key}",
         "",
-        "## 项目是什么",
+        "## 项目结构",
         brief_frame["project_summary"],
         "",
-        "## issue 在解决什么",
-        brief_frame["issue_summary"],
-        "",
-        "## issue 是否清楚，缺哪些信息",
-        brief_frame["clarity"],
-        "",
-        "## 是否适合尝试",
-        brief_frame["suitability"],
-        "",
-        "## 相关文件 Top-K",
     ]
+    for item in brief_frame["structure_map"]:
+        lines.append(f"- {item}")
+
+    lines.extend(
+        [
+            "",
+            "## issue 拆解",
+        ]
+    )
+    lines.extend(
+        [
+            brief_frame["issue_summary"],
+            "",
+            brief_frame["issue_breakdown"],
+            "",
+            "## issue 是否清楚，缺哪些信息",
+            brief_frame["clarity"],
+            "",
+            "## 是否适合尝试",
+            brief_frame["suitability"],
+            "",
+            "## 相关文件 Top-K",
+        ]
+    )
     if top:
         for item in top:
             ev = item["evidence"][0]
@@ -840,7 +917,7 @@ def render_brief(
     lines.extend(
         [
             "",
-            "## 推荐阅读顺序",
+            "## 推荐阅读顺序和理由",
         ]
     )
     if top:
@@ -861,10 +938,36 @@ def render_brief(
     lines.extend(
         [
             "",
-            "## 验证命令或缺失的验证信息",
-            validation or "未检测到明确验证命令；需要阅读项目测试说明或询问 maintainer。",
+            "## 修改影响和风险",
+        ]
+    )
+    for item in brief_frame["impact_risks"]:
+        lines.append(f"- {item}")
+
+    lines.extend(
+        [
             "",
-            "## 风险点",
+            "## 验证计划",
+        ]
+    )
+    if validation:
+        lines.append(f"- 建议命令：`{validation}`")
+    for item in brief_frame["validation_plan"]:
+        lines.append(f"- {item}")
+
+    lines.extend(
+        [
+            "",
+            "## 测试结果怎么看",
+        ]
+    )
+    for item in brief_frame["test_result_interpretation"]:
+        lines.append(f"- {item}")
+
+    lines.extend(
+        [
+            "",
+            "## 固定风险提示",
             "- 当前 brief 只基于 issue 文本、本地文件、`rg` 和 CodeGraph 证据，不证明修复方案正确。",
             "- 如果本地仓库不是 issue 对应版本，文件定位可能被已合并修改影响。",
         ]
@@ -875,12 +978,17 @@ def render_brief(
     lines.extend(
         [
             "",
-            "## 可发给 maintainer 的澄清问题/comment 草稿",
-            (
-                "I found candidate files from the issue terms and will first verify the "
-                "behavior with the project tests. Is there any version-specific context "
-                "or reproduction detail I should check before proposing a small patch?"
-            ),
+            "## maintainer 沟通草稿",
+            brief_frame["maintainer_draft"],
+            "",
+            "## 本次训练的工程能力",
+        ]
+    )
+    for item in brief_frame["ability_takeaways"]:
+        lines.append(f"- {item}")
+
+    lines.extend(
+        [
             "",
             "## trace 摘要",
             f"- search terms: {', '.join(terms)}",
@@ -890,6 +998,41 @@ def render_brief(
         ]
     )
     return "\n".join(lines)
+
+
+def build_project_structure(repo_path: Path) -> list[str]:
+    known_files = {
+        "pyproject.toml": "Python package configuration",
+        "setup.py": "Python package setup",
+        "setup.cfg": "Python package configuration",
+        "requirements.txt": "Python dependencies",
+        "package.json": "Node.js package configuration",
+        "Cargo.toml": "Rust package configuration",
+        "go.mod": "Go module configuration",
+        "README.md": "project README",
+        "README.rst": "project README",
+    }
+    known_dirs = {
+        "src": "source code",
+        "tests": "test suite",
+        "test": "test suite",
+        "docs": "documentation",
+        "examples": "examples",
+        "scripts": "repeatable scripts",
+    }
+    structure = [
+        f"{name}: {description}"
+        for name, description in known_files.items()
+        if (repo_path / name).is_file()
+    ]
+    structure.extend(
+        f"{name}/: {description}"
+        for name, description in known_dirs.items()
+        if (repo_path / name).is_dir()
+    )
+    if not structure:
+        return [f"{repo_path.name}/: local repository root"]
+    return structure
 
 
 def read_project_summary(repo_path: Path) -> str:

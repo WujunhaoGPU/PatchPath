@@ -23,7 +23,8 @@ patchpath analyze --repo <local-repo-path> --issue <github-issue-url-or-owner/re
 
 ```bash
 ./scripts/check-docs.sh
-pytest
+uv run pytest
+./scripts/eval-v0.sh
 patchpath analyze --repo <local-repo-path> --issue <owner/repo#number>
 ```
 
@@ -41,7 +42,8 @@ Current:
 
 ```bash
 ./scripts/check-docs.sh
-pytest
+uv run pytest
+./scripts/eval-v0.sh
 ```
 
 Manual CLI smoke:
@@ -60,5 +62,5 @@ patchpath analyze --repo ../click --issue pallets/click#3502
 
 ## Next Handoff
 
-Run the five issues in `docs/eval-set-v0.md` against a local `pallets/click`
-checkout and confirm at least 4/5 gold source files appear in Top-5.
+Run `./scripts/eval-v0.sh` against a local `pallets/click` checkout, then add
+cross-repo eval cases before expanding beyond CLI.

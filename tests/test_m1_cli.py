@@ -3,7 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from patchpath.cli import analyze, load_env_file, main, parse_issue_ref, read_project_summary
+from patchpath.cli import (
+    analyze,
+    build_project_structure,
+    load_env_file,
+    main,
+    parse_issue_ref,
+    read_project_summary,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -13,11 +20,15 @@ def no_deepseek_api_key(monkeypatch):
 
 def fake_frame(payload):
     path = payload["related_files"][0]["path"]
+    evidence_id = payload["related_files"][0]["evidence"][0]["id"]
     return {
         "project_summary": "Click 是命令行工具库。",
         "issue_summary": "这是一个真实 issue。",
+        "issue_breakdown": "用户遇到的现象需要先回到代码证据确认边界。",
         "clarity": "问题描述需要结合证据阅读。",
         "suitability": "适合作为证据定位练习。",
+        "maintainer_draft": f"我会先根据 {evidence_id} 阅读 `{path}`，再补充验证结果。",
+        "structure_map": payload["project_structure"],
         "reading_order": [
             f"先看 `{path}`，这里是证据最集中的入口。",
             "再看测试文件，确认行为边界。",
@@ -25,6 +36,12 @@ def fake_frame(payload):
         "change_points": [
             f"`{path}` 可能是主要修改点，因为 evidence 指向相关逻辑。"
         ],
+        "impact_risks": [
+            f"修改 `{path}` 可能影响相邻调用，先用 {evidence_id} 限定范围。"
+        ],
+        "validation_plan": ["先运行相关测试，再补充最小复现。"],
+        "test_result_interpretation": ["测试失败说明定位假设还需要回到 evidence 复核。"],
+        "ability_takeaways": ["训练项目阅读、证据定位、影响分析和维护者沟通。"],
     }
 
 
@@ -97,16 +114,18 @@ def test_brief_contains_required_m1_sections(tmp_path):
 
     brief = (Path(result["run_dir"]) / "brief.md").read_text(encoding="utf-8")
     for section in [
-        "## 项目是什么",
-        "## issue 在解决什么",
+        "## 项目结构",
+        "## issue 拆解",
         "## issue 是否清楚，缺哪些信息",
         "## 是否适合尝试",
         "## 相关文件 Top-K",
-        "## 推荐阅读顺序",
+        "## 推荐阅读顺序和理由",
         "## 可能修改点",
-        "## 验证命令或缺失的验证信息",
-        "## 风险点",
-        "## 可发给 maintainer 的澄清问题/comment 草稿",
+        "## 修改影响和风险",
+        "## 验证计划",
+        "## 测试结果怎么看",
+        "## maintainer 沟通草稿",
+        "## 本次训练的工程能力",
         "## trace 摘要",
     ]:
         assert section in brief
@@ -139,7 +158,7 @@ def test_llm_frame_rejects_paths_outside_topk(tmp_path):
 
     def fake_llm(_payload):
         frame = fake_frame(_payload)
-        frame["reading_order"] = ["先看 `src/click/missing.py`。"]
+        frame["impact_risks"] = ["先看 `src/click/missing.py` 的影响。"]
         return frame
 
     with pytest.raises(RuntimeError, match="outside Top-K"):
@@ -159,7 +178,7 @@ def test_llm_frame_rejects_unknown_evidence_ids(tmp_path):
 
     def fake_llm(_payload):
         frame = fake_frame(_payload)
-        frame["change_points"] = ["根据 E999 看 `src/click/shell_completion.py`。"]
+        frame["test_result_interpretation"] = ["根据 E999 判断测试失败原因。"]
         return frame
 
     with pytest.raises(RuntimeError, match="unknown evidence ids"):
@@ -225,10 +244,17 @@ def test_brief_uses_llm_frame_for_intro_sections(tmp_path):
         return {
             "project_summary": "Click 是一个用来写命令行工具的 Python 库。",
             "issue_summary": "Fish 自动补全在 8.4.1 版本坏了。",
+            "issue_breakdown": "需要先确认 fish 补全格式化逻辑。",
             "clarity": "问题方向清楚，但还要确认触发命令和 shell 环境。",
             "suitability": "适合尝试：范围集中，已有相关源码和测试。",
+            "maintainer_draft": "我会先验证 fish 补全行为再提交结论。",
+            "structure_map": _payload["project_structure"],
             "reading_order": ["先看 `src/click/shell_completion.py`。"],
             "change_points": ["关注 `src/click/shell_completion.py` 的补全格式化逻辑。"],
+            "impact_risks": ["修改补全格式可能影响其他 shell。"],
+            "validation_plan": ["先运行相关测试，再结合补全行为补最小复现。"],
+            "test_result_interpretation": ["如果测试失败，先确认输出格式是否变化。"],
+            "ability_takeaways": ["训练 shell 补全路径定位。"],
         }
 
     result = analyze(
@@ -338,10 +364,17 @@ def test_closed_issue_llm_frame_is_not_current_contribution(tmp_path):
         llm_client=lambda _payload: {
             "project_summary": "Click 是命令行工具库。",
             "issue_summary": "Fish 补全坏了。",
+            "issue_breakdown": "这个 closed issue 适合复盘定位过程。",
             "clarity": "问题清楚。",
             "suitability": "not recommended：issue 已关闭，不适合作为当前贡献。",
+            "maintainer_draft": "这个 issue 已关闭，不建议再发当前贡献 comment。",
+            "structure_map": _payload["project_structure"],
             "reading_order": ["先看 `src/click/shell_completion.py`。"],
             "change_points": ["只做复盘，不建议当前修改。"],
+            "impact_risks": ["不要在已关闭 issue 上重复提交相同修改。"],
+            "validation_plan": ["只作为回归样本运行相关测试。"],
+            "test_result_interpretation": ["通过说明当前分支可能已包含修复。"],
+            "ability_takeaways": ["训练 closed issue 的复盘判断。"],
         },
     )
 
@@ -393,3 +426,18 @@ def test_project_summary_skips_html_logo_lines(tmp_path):
     assert read_project_summary(repo) == (
         "`click`: Click is a Python package for creating command line interfaces."
     )
+
+
+def test_project_structure_scanner_detects_common_files_and_directories(tmp_path):
+    repo = tmp_path / "project"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    for directory in ("src", "tests", "docs"):
+        (repo / directory).mkdir()
+
+    structure = build_project_structure(repo)
+
+    assert "pyproject.toml: Python package configuration" in structure
+    assert "src/: source code" in structure
+    assert "tests/: test suite" in structure
+    assert "docs/: documentation" in structure
