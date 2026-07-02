@@ -211,8 +211,12 @@ def build_brief_frame(
     trace: list[dict[str, Any]],
     llm_client: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    project_structure = build_project_structure(
+        repo_path,
+        [item["path"] for item in related_files[:5]],
+    )
     fallback = template_brief_frame(repo_path, issue_context, related_files)
-    project_structure = build_project_structure(repo_path)
+    fallback["structure_map"] = project_structure
     payload = {
         "project_summary": fallback["project_summary"],
         "project_structure": project_structure,
@@ -230,6 +234,7 @@ def build_brief_frame(
     if llm_client:
         try:
             frame = normalize_brief_frame(llm_client(payload))
+            frame["structure_map"] = project_structure
             validate_brief_frame_grounding(frame, related_files)
             trace_llm_frame(trace, "llm", payload, frame, None, [])
             return frame
@@ -247,6 +252,7 @@ def build_brief_frame(
     model = os.environ.get("PATCHPATH_LLM_MODEL", "deepseek-v4-flash")
     try:
         frame = normalize_brief_frame(call_deepseek_frame(api_key, model, payload))
+        frame["structure_map"] = project_structure
         validate_brief_frame_grounding(frame, related_files)
         trace_llm_frame(trace, "deepseek", payload, frame, None, [])
         return frame
@@ -332,7 +338,14 @@ def normalize_brief_frame(frame: dict[str, Any]) -> dict[str, Any]:
         normalized[key] = compact_text(value)
     for key in LIST_FRAME_FIELDS:
         normalized[key] = normalize_text_list(frame[key], key)
+    ensure_chinese_issue_fields(normalized)
     return normalized
+
+
+def ensure_chinese_issue_fields(frame: dict[str, Any]) -> None:
+    for key in ("issue_summary", "issue_breakdown"):
+        if not re.search(r"[\u4e00-\u9fff]", frame[key]):
+            raise ValueError(f"{key} must be Chinese while preserving code terms")
 
 
 def compact_text(value: str) -> str:
@@ -340,9 +353,12 @@ def compact_text(value: str) -> str:
 
 
 def normalize_text_list(value: Any, key: str) -> list[str]:
-    if not isinstance(value, list):
-        raise ValueError(f"LLM frame field must be a list: {key}")
-    items = [compact_text(str(item)) for item in value if compact_text(str(item))]
+    if isinstance(value, str):
+        items = [compact_text(value)] if compact_text(value) else []
+    elif isinstance(value, list):
+        items = [compact_text(str(item)) for item in value if compact_text(str(item))]
+    else:
+        raise ValueError(f"LLM frame field has invalid shape: {key}")
     if not items:
         raise ValueError(f"LLM frame missing fields: {key}")
     return items
@@ -396,20 +412,8 @@ def call_deepseek_frame(
     model: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    prompt = (
-        "请基于真实 issue、项目结构和文件证据，生成一份 guided contribution training session。"
-        "要求：通俗易懂，不冗余；用教练口吻解释为什么这么读、怎么判断、怎么验证；"
-        "不要编造文件、复现步骤或修复方案；"
-        "如果 issue_state 是 closed，要说明它不适合作为当前贡献，只适合学习、复盘或回归验证；"
-        "凡是推荐阅读、修改、风险、验证和沟通中出现的代码文件，只能来自 related_files；"
-        "如需引用证据，只能使用 related_files 中已有 evidence id。"
-        "text 字段最多两句话，list 字段各输出 2-5 条。"
-        "只输出 JSON，text 字段为 project_summary, issue_summary, issue_breakdown, "
-        "clarity, suitability, maintainer_draft；list 字段为 structure_map, reading_order, "
-        "change_points, impact_risks, validation_plan, test_result_interpretation, "
-        "ability_takeaways。\n\n"
-        + json.dumps(payload, ensure_ascii=False)
-    )
+    timeout_seconds = int(os.environ.get("PATCHPATH_LLM_TIMEOUT_SECONDS", "90"))
+    prompt = build_deepseek_prompt(payload)
     body = json.dumps(
         {
             "model": model,
@@ -417,8 +421,8 @@ def call_deepseek_frame(
                 {
                     "role": "system",
                     "content": (
-                        "You write concise Chinese guided contribution training sessions "
-                        "grounded in repository and issue evidence."
+                        "Write concise Simplified Chinese guided contribution training sessions. "
+                        "Keep code identifiers, paths, commands, errors, versions, and PR numbers unchanged."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -437,14 +441,40 @@ def call_deepseek_frame(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
             data = json.loads(response.read().decode("utf-8"))
+    except TimeoutError as exc:
+        raise RuntimeError(
+            f"DeepSeek request timed out after {timeout_seconds} seconds"
+        ) from exc
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"DeepSeek HTTP {exc.code}: {detail}") from exc
 
     content = data["choices"][0]["message"]["content"]
     return json.loads(content)
+
+
+def build_deepseek_prompt(payload: dict[str, Any]) -> str:
+    return (
+        "请基于真实 issue、项目结构和文件证据，生成一份 guided contribution training session。"
+        "要求：必须使用简体中文，通俗易懂，不冗余；用教练口吻解释为什么这么读、怎么判断、怎么验证；"
+        "翻译和总结时必须结合仓库语境、issue 正文、评论和 related_files，避免脱离上下文直译；"
+        "不要把专有名词、协议名、产品名和代码标识符强行翻译，例如 MCP、CLI、API、SDK、"
+        "包名、命令名、函数名、类名和文件名都应保留原文；"
+        "issue_summary 和 issue_breakdown 要把 GitHub issue 原文翻译成自然中文，"
+        "但函数名、类名、方法名、文件路径、命令、错误信息、PR 编号、版本号和引用文本必须保留英文原文；"
+        "不要编造文件、复现步骤或修复方案；"
+        "如果 issue_state 是 closed，要说明它不适合作为当前贡献，只适合学习、复盘或回归验证；"
+        "凡是推荐阅读、修改、风险、验证和沟通中出现的代码文件，只能来自 related_files；"
+        "如需引用证据，只能使用 related_files 中已有 evidence id。"
+        "text 字段最多两句话，list 字段各输出 2-5 条。"
+        "只输出 JSON，text 字段为 project_summary, issue_summary, issue_breakdown, "
+        "clarity, suitability, maintainer_draft；list 字段为 structure_map, reading_order, "
+        "change_points, impact_risks, validation_plan, test_result_interpretation, "
+        "ability_takeaways。\n\n"
+        + json.dumps(payload, ensure_ascii=False)
+    )
 
 
 def trace_llm_frame(
@@ -879,9 +909,11 @@ def render_brief(
         "## 项目结构",
         brief_frame["project_summary"],
         "",
+        "```text",
     ]
     for item in brief_frame["structure_map"]:
-        lines.append(f"- {item}")
+        lines.append(item)
+    lines.append("```")
 
     lines.extend(
         [
@@ -909,7 +941,7 @@ def render_brief(
             ev = item["evidence"][0]
             lines.append(
                 f"- `{item['path']}` score={item['score']:.1f} evidence={ev['id']} "
-                f"line {ev['line']} term `{ev['term']}`"
+                f"第 {ev['line']} 行 关键词 `{ev['term']}`"
             )
     else:
         lines.append("- 未找到有证据的相关文件。")
@@ -1000,39 +1032,113 @@ def render_brief(
     return "\n".join(lines)
 
 
-def build_project_structure(repo_path: Path) -> list[str]:
+def build_project_structure(repo_path: Path, issue_paths: list[str] | None = None) -> list[str]:
     known_files = {
-        "pyproject.toml": "Python package configuration",
-        "setup.py": "Python package setup",
-        "setup.cfg": "Python package configuration",
-        "requirements.txt": "Python dependencies",
-        "package.json": "Node.js package configuration",
-        "Cargo.toml": "Rust package configuration",
-        "go.mod": "Go module configuration",
-        "README.md": "project README",
-        "README.rst": "project README",
+        "pyproject.toml": "Python 包配置",
+        "setup.py": "Python 包安装脚本",
+        "setup.cfg": "Python 包配置",
+        "requirements.txt": "Python 依赖",
+        "package.json": "Node.js 包配置",
+        "Cargo.toml": "Rust 包配置",
+        "go.mod": "Go 模块配置",
+        "README.md": "项目说明",
+        "README.rst": "项目说明",
     }
     known_dirs = {
-        "src": "source code",
-        "tests": "test suite",
-        "test": "test suite",
-        "docs": "documentation",
-        "examples": "examples",
-        "scripts": "repeatable scripts",
+        "src": "源码",
+        "tests": "测试",
+        "test": "测试",
+        "docs": "文档",
+        "examples": "示例",
+        "scripts": "可重复脚本",
     }
-    structure = [
-        f"{name}: {description}"
-        for name, description in known_files.items()
-        if (repo_path / name).is_file()
-    ]
-    structure.extend(
-        f"{name}/: {description}"
-        for name, description in known_dirs.items()
-        if (repo_path / name).is_dir()
-    )
-    if not structure:
-        return [f"{repo_path.name}/: local repository root"]
-    return structure
+    tree: dict[str, dict[str, Any]] = {}
+
+    def infer_path_role(path: str, is_test: bool = False) -> str:
+        name = Path(path).name
+        if is_test:
+            return "测试文件"
+        if name in ("cli.js", "cli.ts", "cli.py"):
+            return "命令行入口"
+        if name in ("core.js", "core.ts", "core.py"):
+            return "核心逻辑"
+        if name in ("mcp.js", "mcp.ts", "mcp.py"):
+            return "MCP 集成"
+        if name in ("index.js", "index.ts", "__init__.py"):
+            return "模块入口"
+        if name.endswith((".test.js", ".test.ts", "_test.py", "test.py")):
+            return "测试文件"
+        return ""
+
+    def add_path(path: str, role: str = "", issue: bool = False) -> None:
+        target = repo_path / path
+        parts = [part for part in path.split("/") if part]
+        if not parts:
+            return
+        children = tree
+        for index, part in enumerate(parts):
+            is_leaf = index == len(parts) - 1
+            node = children.setdefault(
+                part,
+                {"children": {}, "role": "", "issue": False, "dir": False},
+            )
+            if not is_leaf:
+                node["dir"] = True
+            if is_leaf:
+                node["dir"] = target.is_dir()
+                node["role"] = role or node["role"]
+                node["issue"] = bool(node["issue"] or issue)
+            children = node["children"]
+
+    for name, description in known_files.items():
+        if (repo_path / name).is_file():
+            add_path(name, description)
+    for name, description in known_dirs.items():
+        if (repo_path / name).is_dir():
+            add_path(name, description)
+
+    for raw_path in issue_paths or []:
+        path = normalize_repo_path(raw_path)
+        if not (repo_path / path).exists():
+            continue
+        is_test = path.startswith(("tests/", "test/")) or Path(path).name.endswith((".test.js", ".test.ts", "_test.py"))
+        base_role = infer_path_role(path, is_test)
+        issue_role = "当前 issue 相关测试" if is_test else "当前 issue 相关源码"
+        role = f"{base_role} [issue] {issue_role}" if base_role else issue_role
+        add_path(path, role, issue=True)
+
+    if not tree:
+        return [f"{repo_path.name}/"]
+
+    root_order = list(known_files) + list(known_dirs)
+    lines = [f"{repo_path.name}/"]
+
+    def sort_items(items: list[tuple[str, dict[str, Any]]], depth: int) -> list[tuple[str, dict[str, Any]]]:
+        def key(item: tuple[str, dict[str, Any]]) -> tuple[int, int, str]:
+            name, node = item
+            if depth == 0 and name in root_order:
+                return (root_order.index(name), 0, name)
+            return (len(root_order), 0 if node["dir"] else 1, name)
+
+        return sorted(items, key=key)
+
+    def render(children: dict[str, dict[str, Any]], prefix: str = "", depth: int = 0) -> None:
+        items = sort_items(list(children.items()), depth)
+        for index, (name, node) in enumerate(items):
+            last = index == len(items) - 1
+            connector = "`-- " if last else "|-- "
+            child_prefix = "    " if last else "|   "
+            display = f"{name}/" if node["dir"] else name
+            role = node["role"]
+            if node["issue"] and "[issue]" not in role:
+                role = f"[issue] {role}".strip()
+            label = display.ljust(24)
+            lines.append(f"{prefix}{connector}{label} {role}".rstrip())
+            if node["children"]:
+                render(node["children"], prefix + child_prefix, depth + 1)
+
+    render(tree)
+    return lines
 
 
 def read_project_summary(repo_path: Path) -> str:
@@ -1080,6 +1186,9 @@ def main(argv: list[str] | None = None) -> int:
     analyze_parser.add_argument("--issue", required=True)
     analyze_parser.add_argument("--output-root")
     analyze_parser.add_argument("--offline", action="store_true")
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
@@ -1095,6 +1204,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"brief: {result['brief_path']}")
         print(f"trace: {result['trace_path']}")
+        return 0
+
+    if args.command == "serve":
+        from patchpath.web import serve
+
+        serve(args.host, args.port)
         return 0
 
     return 1

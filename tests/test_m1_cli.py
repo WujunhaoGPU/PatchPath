@@ -5,9 +5,12 @@ import pytest
 
 from patchpath.cli import (
     analyze,
+    build_deepseek_prompt,
     build_project_structure,
+    call_deepseek_frame,
     load_env_file,
     main,
+    normalize_brief_frame,
     parse_issue_ref,
     read_project_summary,
 )
@@ -129,6 +132,90 @@ def test_brief_contains_required_m1_sections(tmp_path):
         "## trace 摘要",
     ]:
         assert section in brief
+
+
+def test_deepseek_prompt_requires_chinese_issue_translation():
+    prompt = build_deepseek_prompt(
+        {
+            "project_summary": "`click`: Click is a Python package",
+            "project_structure": ["click/"],
+            "issue_title": "Empty output from HelpFormatter.write_usage",
+            "issue_state": "closed",
+            "issue_body": 'Expected "Usage: program" from write_usage(args="")',
+            "labels": ["bug"],
+            "comments": [{"body": "A fix is being worked on at PR #3434"}],
+            "related_files": [],
+        }
+    )
+
+    assert "必须使用简体中文" in prompt
+    assert "HelpFormatter.write_usage" in prompt
+    assert "函数名、类名、方法名、文件路径、命令、错误信息、PR 编号" in prompt
+    assert "结合仓库语境、issue 正文、评论和 related_files" in prompt
+    assert "不要把专有名词、协议名、产品名和代码标识符强行翻译" in prompt
+
+
+def test_normalize_frame_rejects_english_issue_breakdown():
+    frame = fake_frame(
+        {
+            "project_structure": ["click/"],
+            "related_files": [
+                {
+                    "path": "src/click/formatting.py",
+                    "evidence": [{"id": "E1"}],
+                }
+            ]
+        }
+    )
+    frame["issue_summary"] = "HelpFormatter.write_usage outputs an empty line."
+    frame["issue_breakdown"] = "The bug is in write_usage when args is empty."
+
+    with pytest.raises(ValueError, match="must be Chinese"):
+        normalize_brief_frame(frame)
+
+
+def test_normalize_frame_accepts_scalar_list_fields_and_rejects_bad_shapes():
+    frame = fake_frame(
+        {
+            "project_structure": ["click/"],
+            "related_files": [
+                {
+                    "path": "src/click/formatting.py",
+                    "evidence": [{"id": "E1"}],
+                }
+            ],
+        }
+    )
+    frame["test_result_interpretation"] = "测试通过说明当前断言覆盖的行为没有坏。"
+
+    normalized = normalize_brief_frame(frame)
+
+    assert normalized["test_result_interpretation"] == [
+        "测试通过说明当前断言覆盖的行为没有坏。"
+    ]
+
+    frame["test_result_interpretation"] = {"text": "测试通过。"}
+    with pytest.raises(ValueError, match="invalid shape"):
+        normalize_brief_frame(frame)
+
+    frame["test_result_interpretation"] = ""
+    with pytest.raises(ValueError, match="missing fields"):
+        normalize_brief_frame(frame)
+
+
+def test_deepseek_timeout_is_clear_and_configurable(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(_request, timeout):
+        captured["timeout"] = timeout
+        raise TimeoutError("read operation timed out")
+
+    monkeypatch.setenv("PATCHPATH_LLM_TIMEOUT_SECONDS", "7")
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError, match="DeepSeek request timed out after 7 seconds"):
+        call_deepseek_frame("key", "model", {"issue_title": "x"})
+    assert captured["timeout"] == 7
 
 
 def test_llm_rewrites_reading_order_and_change_points(tmp_path):
@@ -437,7 +524,74 @@ def test_project_structure_scanner_detects_common_files_and_directories(tmp_path
 
     structure = build_project_structure(repo)
 
-    assert "pyproject.toml: Python package configuration" in structure
-    assert "src/: source code" in structure
-    assert "tests/: test suite" in structure
-    assert "docs/: documentation" in structure
+    assert structure[0] == "project/"
+    assert any("pyproject.toml" in line and "Python 包配置" in line for line in structure)
+    assert any("src/" in line and "源码" in line for line in structure)
+    assert any("tests/" in line and "测试" in line for line in structure)
+    assert any("docs/" in line and "文档" in line for line in structure)
+
+
+def test_project_structure_highlights_issue_related_paths(tmp_path):
+    repo = tmp_path / "click"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text("[project]\nname='click'\n", encoding="utf-8")
+    (repo / "src/click").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "src/click/formatting.py").write_text("class HelpFormatter: pass\n", encoding="utf-8")
+    (repo / "tests/test_formatting.py").write_text("def test_usage(): pass\n", encoding="utf-8")
+
+    structure = build_project_structure(
+        repo,
+        ["src/click/formatting.py", "tests/test_formatting.py"],
+    )
+
+    assert any("|-- src/" in line and "源码" in line for line in structure)
+    assert any("formatting.py" in line and "[issue] 当前 issue 相关源码" in line for line in structure)
+    assert any("test_formatting.py" in line and "[issue] 当前 issue 相关测试" in line for line in structure)
+
+
+def test_project_structure_describes_common_js_entry_files(tmp_path):
+    repo = tmp_path / "contextforge"
+    repo.mkdir()
+    (repo / "package.json").write_text("{}", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "test").mkdir()
+    (repo / "src/cli.js").write_text("console.log('cli')\n", encoding="utf-8")
+    (repo / "src/core.js").write_text("export const core = true\n", encoding="utf-8")
+    (repo / "src/mcp.js").write_text("export const mcp = true\n", encoding="utf-8")
+    (repo / "test/core.test.js").write_text("test('core')\n", encoding="utf-8")
+
+    structure = build_project_structure(
+        repo,
+        ["src/cli.js", "src/core.js", "src/mcp.js", "test/core.test.js"],
+    )
+
+    assert any("cli.js" in line and "命令行入口" in line and "[issue] 当前 issue 相关源码" in line for line in structure)
+    assert any("core.js" in line and "核心逻辑" in line and "[issue] 当前 issue 相关源码" in line for line in structure)
+    assert any("mcp.js" in line and "MCP 集成" in line and "[issue] 当前 issue 相关源码" in line for line in structure)
+    assert any("core.test.js" in line and "测试文件" in line and "[issue] 当前 issue 相关测试" in line for line in structure)
+
+
+def test_brief_uses_scanned_project_tree_not_llm_structure_rewrite(tmp_path):
+    repo = tmp_path / "click"
+    repo.mkdir()
+    (repo / "src/click").mkdir(parents=True)
+    (repo / "src/click/formatting.py").write_text("HelpFormatter write_usage\n", encoding="utf-8")
+
+    def fake_llm(payload):
+        frame = fake_frame(payload)
+        frame["structure_map"] = ["README-only summary"]
+        return frame
+
+    result = analyze(
+        repo=repo,
+        issue="pallets/click#3360",
+        output_root=tmp_path / "runs",
+        offline=True,
+        llm_client=fake_llm,
+    )
+
+    brief = (Path(result["run_dir"]) / "brief.md").read_text(encoding="utf-8")
+    assert "```text\nclick/" in brief
+    assert "formatting.py" in brief
+    assert "README-only summary" not in brief

@@ -20,9 +20,12 @@ required=(
   "docs/core-beliefs.md"
   "docs/quality-scorecard.md"
   "docs/reviews/m1-click-3502-brief.md"
+  "docs/prototypes/patchpath-web-demo.html"
   "scripts/eval-v0.sh"
   "src/patchpath/cli.py"
+  "src/patchpath/web.py"
   "tests/test_m1_cli.py"
+  "tests/test_web.py"
 )
 
 for path in "${required[@]}"; do

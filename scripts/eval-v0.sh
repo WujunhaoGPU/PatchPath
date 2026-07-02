@@ -38,7 +38,7 @@ def eval_frame(payload):
     evidence_id = first["evidence"][0]["id"]
     return {
         "project_summary": payload["project_summary"],
-        "issue_summary": payload["issue_title"],
+        "issue_summary": "这是一个真实 issue，需要先用中文梳理现象、预期行为和影响范围。",
         "issue_breakdown": "先把现象、预期、复现条件和证据文件分开看。",
         "clarity": "需要结合 issue 文本和文件证据判断是否足够清楚。",
         "suitability": "适合作为 Guided Session V0 的证据定位评测样本。",

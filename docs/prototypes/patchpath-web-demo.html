@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PatchPath Web Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f5;
+      --surface: #ffffff;
+      --surface-2: #f0f4f3;
+      --ink: #18211f;
+      --muted: #61706b;
+      --line: #d8ded9;
+      --blue: #2463eb;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b42318;
+      --radius: 8px;
+      --shadow: 0 14px 35px rgba(25, 36, 31, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      letter-spacing: 0;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(36, 99, 235, 0.12), rgba(21, 128, 61, 0.18)),
+        var(--surface-2);
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex: 1;
+    }
+
+    .issue-entry {
+      display: grid;
+      grid-template-columns: minmax(300px, 1fr) auto auto;
+      gap: 8px;
+      max-width: 820px;
+      margin-left: auto;
+      flex: 1;
+    }
+
+    .status-pill {
+      border: 1px solid #b8d8c0;
+      color: var(--green);
+      background: #eff8f1;
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    main {
+      max-width: 1480px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 14px 24px 28px;
+    }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .section-nav,
+    .coach-rail {
+      align-self: start;
+      position: sticky;
+      top: 18px;
+      padding: 16px;
+    }
+
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin: 14px 0 6px;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink);
+      background: #fbfcfb;
+      padding: 10px 11px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: rgba(36, 99, 235, 0.65);
+      box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.12);
+    }
+
+    .primary {
+      border: 0;
+      border-radius: var(--radius);
+      background: var(--blue);
+      color: white;
+      padding: 11px 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .primary:disabled,
+    .secondary:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .secondary {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 9px 11px;
+      cursor: pointer;
+    }
+
+    .run-meta {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .meta-row span {
+      white-space: nowrap;
+    }
+
+    .meta-row strong {
+      color: var(--ink);
+      font-weight: 700;
+      text-align: right;
+      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+
+    .workspace {
+      min-width: 0;
+      display: grid;
+      gap: 14px;
+    }
+
+    .run-header {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .run-title {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+    }
+
+    .run-summary {
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 780px;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border-radius: var(--radius);
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #fbfcfb;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.green {
+      border-color: #b8d8c0;
+      background: #eff8f1;
+      color: var(--green);
+    }
+
+    .badge.amber {
+      border-color: #f3d0a5;
+      background: #fff7ed;
+      color: var(--amber);
+    }
+
+    .nav-stack {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .tab {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfb;
+      color: var(--muted);
+      padding: 10px 11px;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .tab.active {
+      color: var(--blue);
+      border-color: #bcd0ff;
+      background: #eef4ff;
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 16px;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .assessment-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .structure-block,
+    .issue-block {
+      margin-bottom: 14px;
+    }
+
+    .block {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #fbfcfb;
+    }
+
+    .block h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .block p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .list li + li {
+      margin-top: 7px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      background: #fbfcfb;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    td code {
+      background: #edf2ff;
+      color: #1e40af;
+      border-radius: 5px;
+      padding: 2px 5px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .path {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #17423b;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .structure-tree {
+      margin: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #f7faf9;
+      color: #20352f;
+      overflow-x: auto;
+      font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .step-index {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      color: var(--blue);
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .coach-note {
+      border-left: 3px solid var(--blue);
+      padding: 10px 12px;
+      background: #eff6ff;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      color: #1e3a8a;
+    }
+
+    .draft {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #fbfcfb;
+      white-space: pre-wrap;
+      color: var(--ink);
+    }
+
+    .empty {
+      min-height: 320px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed #c9d2cc;
+      border-radius: var(--radius);
+      background: #fbfcfb;
+    }
+
+    @media (max-width: 980px) {
+      .workbench {
+        grid-template-columns: 1fr;
+      }
+
+      .section-nav,
+      .coach-rail {
+        position: static;
+      }
+
+      .run-header {
+        grid-template-columns: 1fr;
+      }
+
+      .badge-row {
+        justify-content: flex-start;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .topbar,
+      main {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .top-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .issue-entry {
+        grid-template-columns: 1fr;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="topbar">
+        <div class="brand">
+          <div class="mark">P</div>
+          <div>
+            <h1>PatchPath</h1>
+            <p class="subtitle">自动分析驱动的开源实战教练</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span class="status-pill">Guided Session V0</span>
+          <label class="visually-hidden" for="issueInput">GitHub Issue URL</label>
+          <div class="issue-entry">
+            <input id="issueInput" value="https://github.com/pallets/click/issues/3360" spellcheck="false" aria-label="GitHub Issue URL">
+            <button class="primary" id="runBtn" type="button">运行真实分析</button>
+            <button class="secondary" id="planEnvBtn" type="button" disabled>准备测试环境</button>
+          </div>
+          <button class="secondary" id="resetBtn" type="button">重置</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="workbench">
+        <aside class="panel section-nav">
+          <h2 class="section-title">训练单导航</h2>
+          <nav class="nav-stack" aria-label="session sections">
+            <button class="tab active" data-tab="brief" type="button">训练单</button>
+            <button class="tab" data-tab="files" type="button">文件定位</button>
+            <button class="tab" data-tab="validation" type="button">影响与测试</button>
+            <button class="tab" data-tab="communication" type="button">沟通草稿</button>
+          </nav>
+          <div class="run-meta" aria-label="run metadata">
+            <div class="meta-row"><span>证据源</span><strong>rg + CodeGraph</strong></div>
+            <div class="meta-row"><span>LLM</span><strong>DeepSeek 分析</strong></div>
+            <div class="meta-row"><span>输出</span><strong>brief.md</strong></div>
+            <div class="meta-row"><span>仓库缓存</span><strong id="repoCache">等待分析</strong></div>
+            <div class="meta-row"><span>状态</span><strong id="runStatus">未运行</strong></div>
+          </div>
+        </aside>
+
+        <section class="workspace">
+          <div class="panel run-header">
+            <div>
+              <h2 class="run-title" id="runTitle">PatchPath Web Demo</h2>
+              <p class="run-summary" id="runSummary">粘贴 GitHub issue URL 后，PatchPath 会缓存仓库并生成一次开源贡献训练单。</p>
+            </div>
+            <div class="badge-row">
+              <span class="badge green">证据驱动</span>
+              <span class="badge amber">不自动改代码</span>
+              <span class="badge">包含 trace</span>
+            </div>
+          </div>
+
+          <div class="panel">
+
+            <div class="tab-panel active" id="brief">
+              <div id="briefContent" class="empty">等待生成训练单</div>
+            </div>
+
+            <div class="tab-panel" id="files">
+              <div id="filesContent" class="empty">等待文件定位结果</div>
+            </div>
+
+            <div class="tab-panel" id="validation">
+              <div id="validationContent" class="empty">等待影响分析和验证计划</div>
+            </div>
+
+            <div class="tab-panel" id="communication">
+              <div id="communicationContent" class="empty">等待沟通草稿</div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel coach-rail">
+          <h2 class="section-title">下一步</h2>
+          <ul class="list">
+            <li>先看项目结构，确认源码、测试、文档在哪里。</li>
+            <li>再按 Top-K 文件阅读，不要跳过 evidence。</li>
+            <li>准备测试环境后，优先运行训练单里的最小测试命令。</li>
+          </ul>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sample = {
+      issue: "pallets/click#3360",
+      title: "HelpFormatter.write_usage 在没有传递参数时输出空行",
+      suitability: "适合作为 Guided Session V0 的证据定位评测样本。",
+      project: "`click`: 用于创建命令行界面的 Python 包。",
+      structure: [
+        "click/",
+        "|-- pyproject.toml        Python 包配置",
+        "|-- src/                  源码",
+        "|   `-- click/",
+        "|       `-- formatting.py [issue] 当前 issue 相关源码",
+        "|-- tests/                测试",
+        "|   `-- test_formatting.py [issue] 当前 issue 相关测试",
+        "|-- docs/                 文档",
+        "`-- examples/             示例"
+      ],
+      breakdown: "HelpFormatter.write_usage 在没有传递参数时输出空行，而不是显示 \"Usage: program\"。该 issue 已关闭，修复工作正在 PR #3434 中进行。该 bug 位于 write_usage 方法：当 args 为空时，它不会渲染 usage 行。这是一个影响无参数命令内部帮助显示的回归。",
+      files: [
+        { path: "src/click/formatting.py", score: 469.0, evidence: "E4", line: 110, term: "HelpFormatter", role: "首要源码入口" },
+        { path: "tests/test_formatting.py", score: 279.0, evidence: "E2", line: 444, term: "HelpFormatter.write_usage", role: "首要测试入口" },
+        { path: "src/click/core.py", score: 62.0, evidence: "E5", line: 34, term: "HelpFormatter", role: "调用侧背景" },
+        { path: "src/click/__init__.py", score: 42.0, evidence: "E10", line: 39, term: "HelpFormatter", role: "公开导出线索" },
+        { path: "tests/test_custom_classes.py", score: 28.0, evidence: "E13", line: 52, term: "HelpFormatter", role: "扩展行为线索" }
+      ],
+      reading: [
+        "先看 `src/click/formatting.py`，因为这里包含最直接的证据 E4。",
+        "再看 `tests/test_formatting.py`，确认已有测试如何描述 usage 输出。",
+        "最后回到 `src/click/core.py`，确认格式化器如何被命令执行路径调用。"
+      ],
+      changes: [
+        "`src/click/formatting.py` 是首要修改假设位置，需要继续读相邻测试。",
+        "如果修改 usage 输出，先确认是否影响普通命令、多参数命令和自定义 formatter。"
+      ],
+      risks: [
+        "修改 `src/click/formatting.py` 前要确认相邻行为和兼容性风险。",
+        "当前本地 checkout 可能已经包含修复，定位结果适合训练，不等于当前仍可贡献。"
+      ],
+      validation: [
+        "建议命令：pytest tests/test_formatting.py",
+        "运行相关测试并保留失败/通过输出。",
+        "如果测试缺口明显，先补一个最小复现测试再改实现。"
+      ],
+      interpretation: [
+        "测试通过只说明已有断言未坏；失败要回到 evidence 重新定位。",
+        "如果只有新增复现失败，说明问题可能仍存在或本地分支不是修复后的版本。",
+        "如果大量无关测试失败，先排除环境和依赖版本问题。"
+      ],
+      draft: "I traced the issue to `src/click/formatting.py` based on evidence E4 and will verify it with `tests/test_formatting.py`. Before proposing a small patch, is there any version-specific behavior around empty argument lists that I should preserve?",
+      abilities: [
+        "项目结构阅读",
+        "issue 现象拆解",
+        "文件证据定位",
+        "修改影响分析",
+        "测试结果判断",
+        "maintainer 沟通"
+      ]
+    };
+
+    const runBtn = document.getElementById("runBtn");
+    const planEnvBtn = document.getElementById("planEnvBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const issueInput = document.getElementById("issueInput");
+    const runStatus = document.getElementById("runStatus");
+    const repoCache = document.getElementById("repoCache");
+    const runTitle = document.getElementById("runTitle");
+    const runSummary = document.getElementById("runSummary");
+    const STORAGE_ISSUE_KEY = "patchpath.issueUrl";
+    const STORAGE_RESULT_KEY = "patchpath.lastAnalyzeResult";
+    let currentRepoPath = "";
+
+    function saveIssueUrl() {
+      localStorage.setItem(STORAGE_ISSUE_KEY, issueInput.value.trim());
+    }
+
+    function saveAnalyzeResult(data) {
+      localStorage.setItem(STORAGE_RESULT_KEY, JSON.stringify(data));
+    }
+
+    function esc(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function list(items) {
+      return `<ul class="list">${items.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    }
+
+    function inlineMarkdown(value) {
+      return esc(value).replace(/`([^`]+)`/g, "<code>$1</code>");
+    }
+
+    function sectionHtml(text) {
+      const rawLines = String(text || "").split("\n");
+      const lines = rawLines.map((line) => line.trim()).filter(Boolean);
+      if (!lines.length) {
+        return "<p>暂无内容</p>";
+      }
+      const fenceStart = rawLines.findIndex((line) => line.trim().startsWith("```"));
+      if (fenceStart !== -1) {
+        const fenceEnd = rawLines.findIndex((line, index) => index > fenceStart && line.trim().startsWith("```"));
+        if (fenceEnd !== -1) {
+          const before = rawLines.slice(0, fenceStart).map((line) => line.trim()).filter(Boolean).map((line) => `<p>${inlineMarkdown(line)}</p>`).join("");
+          const code = rawLines.slice(fenceStart + 1, fenceEnd).join("\n").replace(/^\n+|\n+$/g, "");
+          const after = rawLines.slice(fenceEnd + 1).map((line) => line.trim()).filter(Boolean).map((line) => `<p>${inlineMarkdown(line)}</p>`).join("");
+          return `${before}<pre class="structure-tree">${esc(code)}</pre>${after}`;
+        }
+      }
+      const listItems = lines.filter((line) => line.startsWith("- "));
+      if (listItems.length === lines.length) {
+        return `<ul class="list">${listItems.map((line) => `<li>${inlineMarkdown(line.slice(2))}</li>`).join("")}</ul>`;
+      }
+      return lines.map((line) => {
+        if (line.startsWith("- ")) {
+          return `<p>${inlineMarkdown(line.slice(2))}</p>`;
+        }
+        return `<p>${inlineMarkdown(line)}</p>`;
+      }).join("");
+    }
+
+    function renderBrief() {
+      document.getElementById("briefContent").className = "";
+      document.getElementById("briefContent").innerHTML = `
+        <section class="block structure-block">
+          <h3>项目结构</h3>
+          <p>${esc(sample.project)}</p>
+          <pre class="structure-tree">${esc(sample.structure.join("\n"))}</pre>
+        </section>
+        <section class="block issue-block">
+          <h3>issue 拆解</h3>
+          <p>${esc(sample.breakdown)}</p>
+        </section>
+        <div class="assessment-grid">
+          <section class="block">
+            <h3>清晰度和适合度</h3>
+            <p>${esc(sample.suitability)}</p>
+          </section>
+          <section class="block">
+            <h3>本次训练的工程能力</h3>
+            ${list(sample.abilities)}
+          </section>
+        </div>
+      `;
+    }
+
+    function renderFiles() {
+      document.getElementById("filesContent").className = "";
+      document.getElementById("filesContent").innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>文件</th>
+                <th>角色</th>
+                <th>分数</th>
+                <th>证据</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sample.files.map((file) => `
+                <tr>
+                  <td class="path">${esc(file.path)}</td>
+                  <td>${esc(file.role)}</td>
+                  <td>${file.score.toFixed(1)}</td>
+                  <td><code>${esc(file.evidence)}</code> 第 ${file.line} 行 关键词 <code>${esc(file.term)}</code></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div style="height:14px"></div>
+        <div class="timeline">
+          ${sample.reading.map((item, index) => `
+            <div class="step">
+              <div class="step-index">${index + 1}</div>
+              <div class="coach-note">${esc(item)}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderValidation() {
+      document.getElementById("validationContent").className = "";
+      document.getElementById("validationContent").innerHTML = `
+        <div class="grid-2">
+          <section class="block">
+            <h3>可能修改点</h3>
+            ${list(sample.changes)}
+          </section>
+          <section class="block">
+            <h3>修改影响和风险</h3>
+            ${list(sample.risks)}
+          </section>
+          <section class="block">
+            <h3>验证计划</h3>
+            ${list(sample.validation)}
+          </section>
+          <section class="block">
+            <h3>测试结果怎么看</h3>
+            ${list(sample.interpretation)}
+          </section>
+        </div>
+      `;
+    }
+
+    function renderCommunication() {
+      document.getElementById("communicationContent").className = "";
+      document.getElementById("communicationContent").innerHTML = `
+        <section class="block">
+          <h3>maintainer 沟通草稿</h3>
+          <div class="draft">${esc(sample.draft)}</div>
+          <div style="height:12px"></div>
+          <button class="secondary" id="copyBtn" type="button">复制草稿</button>
+        </section>
+      `;
+      document.getElementById("copyBtn").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(sample.draft);
+        document.getElementById("copyBtn").textContent = "已复制";
+      });
+    }
+
+    function renderApiSession(data) {
+      const sections = data.brief.sections || {};
+      const files = data.related_files || [];
+      currentRepoPath = data.repo_path || "";
+      runStatus.textContent = "真实分析完成";
+      repoCache.textContent = currentRepoPath || "未知";
+      planEnvBtn.disabled = !currentRepoPath;
+      planEnvBtn.textContent = "准备测试环境";
+      runTitle.textContent = data.brief.title || `开源贡献训练单：${data.issue.key}`;
+      runSummary.textContent = data.issue.title || data.issue.key;
+
+      document.getElementById("briefContent").className = "";
+      document.getElementById("briefContent").innerHTML = `
+        <section class="block structure-block">
+          <h3>项目结构</h3>
+          ${sectionHtml(sections["项目结构"])}
+        </section>
+        <section class="block issue-block">
+          <h3>issue 拆解</h3>
+          ${sectionHtml(sections["issue 拆解"])}
+        </section>
+        <div class="assessment-grid">
+          <section class="block">
+            <h3>清晰度和适合度</h3>
+            ${sectionHtml(`${sections["issue 是否清楚，缺哪些信息"] || ""}\n${sections["是否适合尝试"] || ""}`)}
+          </section>
+          <section class="block">
+            <h3>本次训练的工程能力</h3>
+            ${sectionHtml(sections["本次训练的工程能力"])}
+          </section>
+        </div>
+      `;
+
+      document.getElementById("filesContent").className = "";
+      document.getElementById("filesContent").innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>文件</th>
+                <th>分数</th>
+                <th>证据</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${files.map((file) => {
+                const evidence = (file.evidence || [])[0] || {};
+                return `
+                  <tr>
+                    <td class="path">${esc(file.path)}</td>
+                    <td>${Number(file.score || 0).toFixed(1)}</td>
+                    <td><code>${esc(evidence.id || "-")}</code> 第 ${esc(evidence.line || "-")} 行 关键词 <code>${esc(evidence.term || "-")}</code></td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div style="height:14px"></div>
+        <div class="block">
+          <h3>推荐阅读顺序和理由</h3>
+          ${sectionHtml(sections["推荐阅读顺序和理由"])}
+        </div>
+      `;
+
+      document.getElementById("validationContent").className = "";
+      document.getElementById("validationContent").innerHTML = `
+        <div class="grid-2">
+          <section class="block">
+            <h3>可能修改点</h3>
+            ${sectionHtml(sections["可能修改点"])}
+          </section>
+          <section class="block">
+            <h3>修改影响和风险</h3>
+            ${sectionHtml(sections["修改影响和风险"])}
+          </section>
+          <section class="block">
+            <h3>验证计划</h3>
+            ${sectionHtml(sections["验证计划"])}
+          </section>
+          <section class="block">
+            <h3>测试结果怎么看</h3>
+            ${sectionHtml(sections["测试结果怎么看"])}
+          </section>
+        </div>
+      `;
+
+      const draft = sections["maintainer 沟通草稿"] || "";
+      document.getElementById("communicationContent").className = "";
+      document.getElementById("communicationContent").innerHTML = `
+        <section class="block">
+          <h3>maintainer 沟通草稿</h3>
+          <div class="draft">${inlineMarkdown(draft)}</div>
+          <div style="height:12px"></div>
+          <button class="secondary" id="copyBtn" type="button">复制草稿</button>
+        </section>
+      `;
+      document.getElementById("copyBtn").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(draft);
+        document.getElementById("copyBtn").textContent = "已复制";
+      });
+    }
+
+    function runDemo() {
+      currentRepoPath = "";
+      runStatus.textContent = "静态样例";
+      repoCache.textContent = "静态样例";
+      planEnvBtn.disabled = true;
+      planEnvBtn.textContent = "准备测试环境";
+      runTitle.textContent = `开源贡献训练单：${sample.issue}`;
+      runSummary.textContent = sample.title;
+      renderBrief();
+      renderFiles();
+      renderValidation();
+      renderCommunication();
+    }
+
+    async function runAnalyze() {
+      const issue = issueInput.value.trim();
+      if (!issue) {
+        runStatus.textContent = "缺少输入";
+        return;
+      }
+      saveIssueUrl();
+      runBtn.disabled = true;
+      planEnvBtn.disabled = true;
+      currentRepoPath = "";
+      repoCache.textContent = "准备仓库";
+      runBtn.textContent = "分析中...";
+      runStatus.textContent = "后端分析中";
+      try {
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ issue })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        saveAnalyzeResult(data);
+        renderApiSession(data);
+      } catch (error) {
+        runStatus.textContent = "分析失败，保留当前结果";
+        alert(`分析失败，当前结果已保留：${error.message}`);
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = "运行真实分析";
+      }
+    }
+
+    async function prepareTestEnvironment() {
+      if (!currentRepoPath) {
+        runStatus.textContent = "请先分析 issue";
+        return;
+      }
+      planEnvBtn.disabled = true;
+      planEnvBtn.textContent = "检测环境...";
+      runStatus.textContent = "检测测试环境";
+      try {
+        const planResponse = await fetch("/api/test-env/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo_path: currentRepoPath })
+        });
+        const planData = await planResponse.json();
+        if (!planResponse.ok || !planData.ok) {
+          throw new Error(planData.error || `HTTP ${planResponse.status}`);
+        }
+        const plan = planData.plan || {};
+        if (!plan.available) {
+          runStatus.textContent = "未识别测试环境";
+          alert(plan.message || "未检测到受支持的项目依赖声明。");
+          return;
+        }
+        const command = (plan.command || []).join(" ");
+        const files = (plan.dependency_files || []).join(", ");
+        const confirmed = confirm(
+          `准备测试环境将运行：\n\n${command}\n\n目录：${plan.cwd}\n依赖声明：${files}\n\n确认执行？`
+        );
+        if (!confirmed) {
+          runStatus.textContent = "已取消环境准备";
+          return;
+        }
+        planEnvBtn.textContent = "准备中...";
+        runStatus.textContent = "准备测试环境";
+        const prepareResponse = await fetch("/api/test-env/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo_path: currentRepoPath })
+        });
+        const result = await prepareResponse.json();
+        if (!prepareResponse.ok || !result.ok) {
+          throw new Error(result.error || result.stderr || `exit ${result.exit_code}`);
+        }
+        runStatus.textContent = "测试环境已准备";
+      } catch (error) {
+        runStatus.textContent = "测试环境准备失败";
+        alert(`测试环境准备失败：${error.message}`);
+      } finally {
+        planEnvBtn.disabled = !currentRepoPath;
+        planEnvBtn.textContent = "准备测试环境";
+      }
+    }
+
+    function resetDemo() {
+      currentRepoPath = "";
+      localStorage.removeItem(STORAGE_RESULT_KEY);
+      runStatus.textContent = "未运行";
+      repoCache.textContent = "等待分析";
+      planEnvBtn.disabled = true;
+      planEnvBtn.textContent = "准备测试环境";
+      runTitle.textContent = "PatchPath Web Demo";
+      runSummary.textContent = "粘贴 GitHub issue URL 后，PatchPath 会缓存仓库并生成一次开源贡献训练单。";
+      for (const id of ["briefContent", "filesContent", "validationContent", "communicationContent"]) {
+        const target = document.getElementById(id);
+        target.className = "empty";
+        target.textContent = id === "briefContent" ? "等待生成训练单" : "等待结果";
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        document.getElementById(button.dataset.tab).classList.add("active");
+      });
+    });
+
+    function restoreSavedSession() {
+      const savedIssue = localStorage.getItem(STORAGE_ISSUE_KEY);
+      if (savedIssue) {
+        issueInput.value = savedIssue;
+      }
+      const savedResult = localStorage.getItem(STORAGE_RESULT_KEY);
+      if (!savedResult) {
+        resetDemo();
+        return;
+      }
+      try {
+        renderApiSession(JSON.parse(savedResult));
+        runStatus.textContent = "已恢复上次分析";
+      } catch (_error) {
+        localStorage.removeItem(STORAGE_RESULT_KEY);
+        resetDemo();
+      }
+    }
+
+    issueInput.addEventListener("input", saveIssueUrl);
+    runBtn.addEventListener("click", runAnalyze);
+    planEnvBtn.addEventListener("click", prepareTestEnvironment);
+    resetBtn.addEventListener("click", resetDemo);
+    restoreSavedSession();
+  </script>
+</body>
+</html>

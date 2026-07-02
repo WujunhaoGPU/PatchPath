@@ -39,3 +39,7 @@ covered by a real fixture from `docs/eval-set-v0.md`.
 - Do not add an agent framework before a simple traceable CLI proves the workflow.
 - Keep outputs evidence-backed: file paths, issue text, commands, and trace.
 - Prefer small contribution plans over large speculative patches.
+- Treat LLM output as an untrusted boundary: normalize harmless shape drift
+  once at the schema boundary, reject missing/unsafe/ungrounded content with a
+  clear error, and add regression tests for whole classes of drift rather than
+  one-off field fixes.

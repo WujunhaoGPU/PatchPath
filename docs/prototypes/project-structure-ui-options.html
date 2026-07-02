@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PatchPath UI Options</title>
+  <style>
+    :root {
+      --bg: #f6f7f3;
+      --surface: #fff;
+      --soft: #f0f4f1;
+      --ink: #17211d;
+      --muted: #61706b;
+      --line: #d7ddd8;
+      --blue: #2463eb;
+      --green: #16803d;
+      --amber: #b45309;
+      --red: #b42318;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.96);
+      padding: 16px 24px;
+    }
+
+    main {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 20px 24px 34px;
+      display: grid;
+      gap: 22px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: 22px; }
+    h2 { margin-bottom: 4px; font-size: 18px; }
+    h3 { margin-bottom: 8px; font-size: 14px; }
+    p { color: var(--muted); }
+
+    .option {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .option-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tag {
+      align-self: start;
+      white-space: nowrap;
+      border: 1px solid #bcd0ff;
+      border-radius: var(--radius);
+      background: #eef4ff;
+      color: var(--blue);
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .mock {
+      min-height: 560px;
+      background: #fbfcfb;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      padding: 12px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+    }
+
+    .mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      color: var(--blue);
+      background: var(--soft);
+    }
+
+    .issue-input {
+      display: flex;
+      gap: 8px;
+      min-width: min(620px, 100%);
+    }
+
+    .issue-input input {
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 9px 10px;
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 9px 11px;
+      font: inherit;
+      font-weight: 700;
+    }
+
+    .primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 3px 7px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .green { color: var(--green); border-color: #b8d8c0; background: #eff8f1; }
+    .amber { color: var(--amber); border-color: #f3d0a5; background: #fff7ed; }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 13px;
+    }
+
+    .tree {
+      margin: 0;
+      padding: 12px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #f7faf9;
+      color: #20352f;
+      font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
+    }
+
+    .hit { color: var(--blue); font-weight: 800; }
+    .test { color: var(--green); font-weight: 800; }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .list li + li { margin-top: 7px; }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fbfcfb;
+    }
+
+    .table th, .table td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .table th {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    code {
+      border-radius: 5px;
+      background: #edf2ff;
+      color: #1e40af;
+      padding: 2px 5px;
+    }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .side-nav {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .nav-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 9px 10px;
+      font-weight: 700;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .coach {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 10px;
+    }
+
+    .num {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      border: 1px solid #bcd0ff;
+      background: #eef4ff;
+      color: var(--blue);
+      font-weight: 800;
+    }
+
+    .dense-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    @media (max-width: 1100px) {
+      .workbench, .split, .coach, .hero-grid, .dense-grid {
+        grid-template-columns: 1fr;
+      }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .issue-input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PatchPath 完整页面 UI 方案</h1>
+    <p>同一份 Click issue 分析结果，比较 3 种页面组织方式。推荐先选信息架构，不急着做动效。</p>
+  </header>
+
+  <main>
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>版本 A：工作台式</h2>
+          <p>左侧是训练单导航，中间是当前章节，右侧固定显示行动建议。适合长期使用。</p>
+        </div>
+        <span class="tag">推荐</span>
+      </div>
+      <div class="mock">
+        <div class="topbar">
+          <div class="brand"><span class="mark">P</span>PatchPath</div>
+          <div class="issue-input">
+            <input value="https://github.com/pallets/click/issues/3360">
+            <button class="primary">分析</button>
+            <button>准备测试环境</button>
+          </div>
+        </div>
+        <div class="workbench">
+          <aside class="side-nav">
+            <div class="nav-item">项目结构 <span class="pill green">当前</span></div>
+            <div class="nav-item">issue 拆解 <span class="pill">3 条</span></div>
+            <div class="nav-item">相关文件 <span class="pill">Top 5</span></div>
+            <div class="nav-item">影响与测试 <span class="pill amber">待确认</span></div>
+            <div class="nav-item">沟通草稿 <span class="pill">可复制</span></div>
+          </aside>
+          <section class="panel">
+            <h3>项目结构</h3>
+            <pre class="tree">click/
+|-- pyproject.toml           Python 包配置
+|-- README.md                项目说明
+|-- src/                     源码
+|   `-- click/
+|       |-- core.py          命令、参数、上下文
+|       `-- <span class="hit">formatting.py</span>    [issue] 当前 issue 相关源码
+|-- tests/                   测试
+|   `-- <span class="test">test_formatting.py</span>  [issue] 当前 issue 相关测试
+|-- docs/                    文档
+`-- examples/                示例</pre>
+          </section>
+          <aside class="panel">
+            <h3>下一步</h3>
+            <ul class="list">
+              <li>先读 <code>src/click/formatting.py</code> 的 usage 输出逻辑。</li>
+              <li>再读 <code>tests/test_formatting.py</code> 里的相邻断言。</li>
+              <li>准备环境后运行 <code>pytest tests/test_formatting.py</code>。</li>
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>版本 B：教练流程式</h2>
+          <p>页面按“理解项目 -> 拆 issue -> 定位文件 -> 验证”线性推进。适合初学者。</p>
+        </div>
+        <span class="tag">学习优先</span>
+      </div>
+      <div class="mock">
+        <div class="topbar">
+          <div class="brand"><span class="mark">P</span>PatchPath</div>
+          <div class="issue-input">
+            <input value="https://github.com/pallets/click/issues/3360">
+            <button class="primary">开始训练</button>
+          </div>
+        </div>
+        <div class="coach">
+          <aside class="panel">
+            <h3>训练进度</h3>
+            <div class="timeline">
+              <div class="step"><span class="num">1</span><p><strong>看懂项目</strong><br>核心代码、测试、文档在哪里。</p></div>
+              <div class="step"><span class="num">2</span><p><strong>拆解 issue</strong><br>现象、预期、复现条件。</p></div>
+              <div class="step"><span class="num">3</span><p><strong>定位文件</strong><br>Top-K 证据和阅读顺序。</p></div>
+              <div class="step"><span class="num">4</span><p><strong>验证和沟通</strong><br>测试结果怎么看，怎么问 maintainer。</p></div>
+            </div>
+          </aside>
+          <section class="panel">
+            <h3>第 1 步：看懂项目结构</h3>
+            <p>这一步不是让你记住整个仓库，而是先知道当前 issue 会经过哪几类文件。</p>
+            <div class="hero-grid">
+              <pre class="tree">click/
+|-- src/              源码
+|   `-- click/
+|       `-- <span class="hit">formatting.py</span>
+|-- tests/            测试
+|   `-- <span class="test">test_formatting.py</span>
+`-- docs/             文档</pre>
+              <div>
+                <h3>教练提示</h3>
+                <ul class="list">
+                  <li><code>formatting.py</code> 是行为发生点。</li>
+                  <li><code>test_formatting.py</code> 是最小验证点。</li>
+                  <li><code>docs/</code> 用来确认公开行为是否有文档约束。</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <div class="option-head">
+        <div>
+          <h2>版本 C：证据看板式</h2>
+          <p>把结构树、Top-K 文件、测试计划并排展示。适合已经会读项目的人快速判断。</p>
+        </div>
+        <span class="tag">效率优先</span>
+      </div>
+      <div class="mock">
+        <div class="topbar">
+          <div class="brand"><span class="mark">P</span>PatchPath</div>
+          <div class="issue-input">
+            <input value="https://github.com/pallets/click/issues/3360">
+            <button class="primary">重新分析</button>
+            <button>准备测试环境</button>
+          </div>
+        </div>
+        <div class="split">
+          <section class="panel">
+            <div class="dense-grid">
+              <div>
+                <h3>项目结构</h3>
+                <pre class="tree">click/
+|-- pyproject.toml     Python 包配置
+|-- src/               源码
+|   `-- click/
+|       `-- <span class="hit">formatting.py</span>
+|-- tests/             测试
+|   `-- <span class="test">test_formatting.py</span>
+`-- docs/              文档</pre>
+              </div>
+              <div>
+                <h3>issue 拆解</h3>
+                <ul class="list">
+                  <li>现象：无参数命令 usage 输出为空。</li>
+                  <li>预期：输出 <code>Usage: program</code>。</li>
+                  <li>范围：help / usage formatting。</li>
+                </ul>
+              </div>
+            </div>
+            <h3 style="margin-top:14px">相关文件 Top-K</h3>
+            <table class="table">
+              <thead><tr><th>文件</th><th>角色</th><th>证据</th></tr></thead>
+              <tbody>
+                <tr><td><code>src/click/formatting.py</code></td><td>主要源码</td><td>E4 HelpFormatter</td></tr>
+                <tr><td><code>tests/test_formatting.py</code></td><td>测试入口</td><td>E2 write_usage</td></tr>
+                <tr><td><code>src/click/core.py</code></td><td>调用背景</td><td>E5 formatter</td></tr>
+              </tbody>
+            </table>
+          </section>
+          <aside class="panel">
+            <h3>风险和验证</h3>
+            <ul class="list">
+              <li>改 usage 输出可能影响 help 文本快照。</li>
+              <li>先补最小复现，再改实现。</li>
+              <li>命令：<code>pytest tests/test_formatting.py</code></li>
+            </ul>
+            <h3 style="margin-top:14px">沟通草稿</h3>
+            <p>I traced this to <code>formatting.py</code> and will verify with <code>test_formatting.py</code>.</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
