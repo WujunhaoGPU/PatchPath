@@ -9,13 +9,15 @@ This project should preserve enough context for future agents and humans to cont
 - Choose whether a contribution is worth making.
 - Own communication with maintainers.
 - Review any suggested change before submitting it.
+- Build transferable engineering judgment from each guided session.
 
 ## Agent Responsibility
 
 - Gather issue and repository evidence.
 - Suggest likely reading paths.
 - Expose uncertainty and missing information.
-- Produce traceable briefs, not unchecked patches.
+- Explain why the reading, change, validation, and communication path matters.
+- Produce traceable guided sessions, not unchecked patches.
 
 ## Must Verify Before Claiming Complete
 

@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import sys
 import subprocess
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 EVAL_FIXTURES: dict[str, dict[str, Any]] = {
     "pallets/click#3502": {
         "title": "fish completion is broken in 8.4.1",
+        "state": "closed",
         "terms": [
             "fish completion",
             "fish",
@@ -26,6 +31,7 @@ EVAL_FIXTURES: dict[str, dict[str, Any]] = {
     },
     "pallets/click#3487": {
         "title": "Echoing empty bytes or bytearray raises TypeError",
+        "state": "closed",
         "terms": [
             "echo",
             "empty bytes",
@@ -40,6 +46,7 @@ EVAL_FIXTURES: dict[str, dict[str, Any]] = {
     },
     "pallets/click#3458": {
         "title": "get_parameter_source() returns None in 8.4.0",
+        "state": "closed",
         "terms": [
             "get_parameter_source",
             "ParameterSource",
@@ -53,6 +60,7 @@ EVAL_FIXTURES: dict[str, dict[str, Any]] = {
     },
     "pallets/click#3403": {
         "title": "default behaviour changes with enable/disable boolean flag pair",
+        "state": "closed",
         "terms": [
             "flag_value",
             "default=True",
@@ -67,6 +75,7 @@ EVAL_FIXTURES: dict[str, dict[str, Any]] = {
     },
     "pallets/click#3360": {
         "title": "Empty output from HelpFormatter.write_usage for a program without arguments",
+        "state": "closed",
         "terms": [
             "HelpFormatter.write_usage",
             "HelpFormatter",
@@ -99,6 +108,8 @@ def analyze(
     issue: str,
     output_root: str | Path | None = None,
     offline: bool = False,
+    llm_client: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    codegraph_runner: Callable[[Path, list[str]], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     repo_path = Path(repo).expanduser().resolve()
     if not repo_path.is_dir():
@@ -111,8 +122,16 @@ def analyze(
     terms = issue_context["terms"] or plan_search_terms(issue_context)
 
     matches = run_rg_terms(repo_path, terms, trace)
+    apply_codegraph_terms(repo_path, terms, matches, trace, codegraph_runner)
     related_files = rank_files(matches)
     run_dir = make_run_dir(output_root, issue_key)
+    brief_frame = build_brief_frame(
+        repo_path=repo_path,
+        issue_context=issue_context,
+        related_files=related_files,
+        trace=trace,
+        llm_client=llm_client,
+    )
 
     guard_warnings = guard_related_files(related_files)
     trace.append(
@@ -144,6 +163,7 @@ def analyze(
         issue_key=issue_key,
         issue_context=issue_context,
         related_files=related_files,
+        brief_frame=brief_frame,
         terms=terms,
         warnings=guard_warnings,
     )
@@ -155,6 +175,375 @@ def analyze(
         "related_files": related_files,
         "issue": issue_context,
     }
+
+
+def build_brief_frame(
+    repo_path: Path,
+    issue_context: dict[str, Any],
+    related_files: list[dict[str, Any]],
+    trace: list[dict[str, Any]],
+    llm_client: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    fallback = template_brief_frame(repo_path, issue_context, related_files)
+    payload = {
+        "project_summary": fallback["project_summary"],
+        "issue_title": issue_context["title"],
+        "issue_state": issue_context.get("state", "unknown"),
+        "issue_body": issue_context.get("body", "")[:4000],
+        "labels": issue_context.get("labels", []),
+        "comments": issue_context.get("comments", [])[:3],
+        "related_files": [
+            {"path": item["path"], "terms": item["terms"], "evidence": item["evidence"][:3]}
+            for item in related_files[:5]
+        ],
+    }
+
+    if llm_client:
+        try:
+            frame = normalize_brief_frame(llm_client(payload))
+            validate_brief_frame_grounding(frame, related_files)
+            trace_llm_frame(trace, "llm", payload, frame, None, [])
+            return frame
+        except Exception as exc:  # pragma: no cover - defensive error path
+            trace_llm_frame(trace, "llm", payload, fallback, "llm_client_error", [str(exc)])
+            raise RuntimeError(f"LLM framing failed: {exc}") from exc
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        trace_llm_frame(trace, "template", payload, fallback, "missing_deepseek_api_key", [])
+        raise RuntimeError(
+            "DEEPSEEK_API_KEY is required. Put it in .env or export it before running patchpath."
+        )
+
+    model = os.environ.get("PATCHPATH_LLM_MODEL", "deepseek-v4-flash")
+    try:
+        frame = normalize_brief_frame(call_deepseek_frame(api_key, model, payload))
+        validate_brief_frame_grounding(frame, related_files)
+        trace_llm_frame(trace, "deepseek", payload, frame, None, [])
+        return frame
+    except Exception as exc:
+        trace_llm_frame(trace, "deepseek", payload, fallback, "deepseek_error", [str(exc)])
+        raise RuntimeError(f"DeepSeek framing failed: {exc}") from exc
+
+
+def load_env_file(path: str | Path = ".env") -> None:
+    env_path = Path(path)
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def template_brief_frame(
+    repo_path: Path,
+    issue_context: dict[str, Any],
+    related_files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    clarity = "基本清楚，但仍需要人工确认复现环境和预期行为。"
+    if not issue_context.get("body"):
+        clarity = "信息不足：当前上下文缺少 issue 正文或复现细节，需要人工确认。"
+
+    suitability = "medium：已有代码证据，可作为阅读和小补丁候选。"
+    if issue_context.get("state") == "closed":
+        suitability = "not recommended：issue 已关闭，更适合作为练习或回归样本，不适合作为当前贡献。"
+    if not related_files:
+        suitability = "not recommended：没有找到可引用的相关文件证据。"
+
+    return {
+        "project_summary": read_project_summary(repo_path),
+        "issue_summary": issue_context["title"],
+        "clarity": clarity,
+        "suitability": suitability,
+        "reading_order": [item["path"] for item in related_files[:5]],
+        "change_points": [
+            f"{item['path']}: {item['evidence'][0]['term']}" for item in related_files[:5]
+        ],
+    }
+
+
+def normalize_brief_frame(frame: dict[str, Any]) -> dict[str, Any]:
+    required_text = ("project_summary", "issue_summary", "clarity", "suitability")
+    required_lists = ("reading_order", "change_points")
+    required = required_text + required_lists
+    missing = [key for key in required if not str(frame.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"LLM frame missing fields: {', '.join(missing)}")
+
+    normalized: dict[str, Any] = {}
+    for key in required_text:
+        value = str(frame.get(key, "")).strip()
+        normalized[key] = compact_text(value)
+    for key in required_lists:
+        normalized[key] = normalize_text_list(frame[key], key)
+    return normalized
+
+
+def compact_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def normalize_text_list(value: Any, key: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"LLM frame field must be a list: {key}")
+    items = [compact_text(str(item)) for item in value if compact_text(str(item))]
+    if not items:
+        raise ValueError(f"LLM frame missing fields: {key}")
+    return items
+
+
+def validate_brief_frame_grounding(
+    frame: dict[str, Any],
+    related_files: list[dict[str, Any]],
+) -> None:
+    top = related_files[:5]
+    allowed_paths = {item["path"] for item in top}
+    allowed_evidence_ids = {
+        evidence["id"] for item in top for evidence in item["evidence"][:3]
+    }
+    generated_text = "\n".join(frame["reading_order"] + frame["change_points"])
+    referenced_paths = extract_path_references(generated_text)
+    unknown_paths = sorted(referenced_paths - allowed_paths)
+    if unknown_paths:
+        raise ValueError(
+            "LLM frame references files outside Top-K: " + ", ".join(unknown_paths)
+        )
+
+    referenced_evidence_ids = set(re.findall(r"\bE\d+\b", generated_text))
+    unknown_evidence_ids = sorted(referenced_evidence_ids - allowed_evidence_ids)
+    if unknown_evidence_ids:
+        raise ValueError(
+            "LLM frame references unknown evidence ids: "
+            + ", ".join(unknown_evidence_ids)
+        )
+
+
+def extract_path_references(text: str) -> set[str]:
+    candidates = set(
+        re.findall(
+            r"(?<![\w./-])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9_+-]+",
+            text,
+        )
+    )
+    return {normalize_repo_path(path.strip("`'\"，,。；;:：）)")) for path in candidates}
+
+
+def call_deepseek_frame(
+    api_key: str,
+    model: str,
+    payload: dict[str, Any],
+) -> dict[str, str]:
+    prompt = (
+        "请基于真实 issue 和文件证据，生成四个简短中文字段。"
+        "要求：通俗易懂，不冗余；不要编造文件、复现步骤或修复方案；"
+        "如果 issue_state 是 closed，要说明它不适合作为当前贡献，只适合学习、复盘或回归验证；"
+        "推荐阅读顺序和可能修改点只能基于 related_files 里的路径和 evidence；"
+        "不要输出 related_files 之外的文件。"
+        "四个说明字段最多两句话，reading_order 和 change_points 各输出 2-5 条。"
+        "只输出 JSON，字段为 project_summary, issue_summary, clarity, suitability, "
+        "reading_order, change_points。\n\n"
+        + json.dumps(payload, ensure_ascii=False)
+    )
+    body = json.dumps(
+        {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You write concise Chinese contribution briefs grounded in evidence.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {"type": "json_object"},
+            "stream": False,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.deepseek.com/chat/completions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"DeepSeek HTTP {exc.code}: {detail}") from exc
+
+    content = data["choices"][0]["message"]["content"]
+    return json.loads(content)
+
+
+def trace_llm_frame(
+    trace: list[dict[str, Any]],
+    provider: str,
+    payload: dict[str, Any],
+    frame: dict[str, Any],
+    fallback_reason: str | None,
+    warnings: list[str],
+) -> None:
+    trace.append(
+        {
+            "node": "llm_frame",
+            "provider": provider,
+            "query": payload["issue_title"],
+            "command": None,
+            "result_count": 1,
+            "selected_paths": [item["path"] for item in payload["related_files"]],
+            "evidence_ids": [
+                evidence["id"]
+                for item in payload["related_files"]
+                for evidence in item["evidence"]
+            ],
+            "frame_keys": sorted(frame),
+            "fallback_reason": fallback_reason,
+            "warnings": warnings,
+            "duration_ms": 0,
+            "exit_code": 0,
+        }
+    )
+
+
+def apply_codegraph_terms(
+    repo_path: Path,
+    terms: list[str],
+    files: dict[str, dict[str, Any]],
+    trace: list[dict[str, Any]],
+    runner: Callable[[Path, list[str]], list[dict[str, Any]]] | None = None,
+) -> None:
+    command = "codegraph status -j <repo>; codegraph query -p <repo> -j -l 5 <term>"
+    fallback_reason = None
+    warnings: list[str] = []
+    try:
+        signals = runner(repo_path, terms) if runner else query_codegraph(repo_path, terms)
+    except Exception as exc:
+        signals = []
+        fallback_reason = "codegraph_unavailable"
+        warnings.append(str(exc))
+
+    next_id = next_evidence_id(files)
+    for signal in signals:
+        path = normalize_repo_path(str(signal.get("path", "")))
+        if not path:
+            continue
+        symbol = str(signal.get("symbol") or signal.get("name") or signal.get("term") or "symbol")
+        item = files.setdefault(
+            path,
+            {"path": path, "score": 0.0, "match_count": 0, "terms": set(), "evidence": []},
+        )
+        item["codegraph_match_count"] = item.get("codegraph_match_count", 0) + 1
+        item["terms"].add(str(signal.get("term") or symbol))
+        if len(item["evidence"]) < 5:
+            item["evidence"].append(
+                {
+                    "id": f"E{next_id}",
+                    "term": f"codegraph:{symbol}",
+                    "line": int(signal.get("line") or 0),
+                    "text": f"CodeGraph {signal.get('kind', 'symbol')} {symbol}",
+                }
+            )
+            next_id += 1
+
+    trace.append(
+        {
+            "node": "tool_execution",
+            "provider": "codegraph",
+            "query": codegraph_terms(terms),
+            "command": command,
+            "result_count": len(signals),
+            "selected_paths": sorted({normalize_repo_path(str(signal.get("path", ""))) for signal in signals if signal.get("path")}),
+            "evidence_ids": [],
+            "fallback_reason": fallback_reason,
+            "warnings": warnings,
+            "duration_ms": 0,
+            "exit_code": 0 if fallback_reason is None else 1,
+        }
+    )
+
+
+def query_codegraph(repo_path: Path, terms: list[str]) -> list[dict[str, Any]]:
+    status = subprocess.run(
+        ["codegraph", "status", "-j", str(repo_path)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if status.returncode != 0:
+        raise RuntimeError(status.stderr.strip() or "codegraph status failed")
+    data = json.loads(status.stdout or "{}")
+    if not data.get("initialized"):
+        init = subprocess.run(
+            ["codegraph", "init", str(repo_path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if init.returncode != 0:
+            raise RuntimeError(init.stderr.strip() or "codegraph init failed")
+
+    signals: list[dict[str, Any]] = []
+    for term in codegraph_terms(terms):
+        query = subprocess.run(
+            ["codegraph", "query", "-p", str(repo_path), "-j", "-l", "5", term],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if query.returncode != 0:
+            continue
+        for result in json.loads(query.stdout or "[]"):
+            node = result.get("node", {})
+            path = node.get("filePath")
+            if not path:
+                continue
+            signals.append(
+                {
+                    "path": path,
+                    "symbol": node.get("name"),
+                    "kind": node.get("kind"),
+                    "line": node.get("startLine"),
+                    "term": term,
+                }
+            )
+    return signals
+
+
+def codegraph_terms(terms: list[str]) -> list[str]:
+    selected = []
+    for term in terms:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?", term):
+            continue
+        if "_" in term or "." in term or any(ch.isupper() for ch in term):
+            selected.append(term)
+    return selected[:10]
+
+
+def normalize_repo_path(path: str) -> str:
+    path = path[2:] if path.startswith("./") else path
+    return path.strip()
+
+
+def next_evidence_id(files: dict[str, dict[str, Any]]) -> int:
+    current = 0
+    for item in files.values():
+        for evidence in item["evidence"]:
+            match = re.fullmatch(r"E(\d+)", evidence["id"])
+            if match:
+                current = max(current, int(match.group(1)))
+    return current + 1
 
 
 def load_issue_context(
@@ -226,6 +615,7 @@ def load_issue_context(
         )
 
     title = (fetched or {}).get("title") or fixture.get("title") or issue_key
+    state = ((fetched or {}).get("state") or fixture.get("state") or "unknown").lower()
     body = (fetched or {}).get("body") or ""
     labels = [label["name"] for label in (fetched or {}).get("labels", [])]
     comments = (fetched or {}).get("comments", [])
@@ -237,6 +627,7 @@ def load_issue_context(
     return {
         "key": issue_key,
         "title": title,
+        "state": state,
         "body": body,
         "labels": labels,
         "comments": comments,
@@ -353,6 +744,7 @@ def rank_files(files: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         path = item["path"]
         terms = item["terms"]
         score = min(item["match_count"], 20) + (len(terms) * 8)
+        score += item.get("codegraph_match_count", 0) * 50
 
         if path.startswith("src/"):
             score += 28
@@ -411,34 +803,27 @@ def render_brief(
     issue_key: str,
     issue_context: dict[str, Any],
     related_files: list[dict[str, Any]],
+    brief_frame: dict[str, str],
     terms: list[str],
     warnings: list[str],
 ) -> str:
     top = related_files[:5]
-    project_summary = read_project_summary(repo_path)
     validation = issue_context.get("validation") or detect_validation(top)
-    clarity = "基本清楚，但仍需要人工确认复现环境和预期行为。"
-    if not issue_context.get("body"):
-        clarity = "信息不足：当前上下文缺少 issue 正文或复现细节，需要人工确认。"
-
-    suitability = "medium：已有代码证据，可作为阅读和小补丁候选。"
-    if not top:
-        suitability = "not recommended：没有找到可引用的相关文件证据。"
 
     lines = [
         f"# PatchPath Brief: {issue_key}",
         "",
         "## 项目是什么",
-        project_summary,
+        brief_frame["project_summary"],
         "",
         "## issue 在解决什么",
-        issue_context["title"],
+        brief_frame["issue_summary"],
         "",
         "## issue 是否清楚，缺哪些信息",
-        clarity,
+        brief_frame["clarity"],
         "",
         "## 是否适合尝试",
-        suitability,
+        brief_frame["suitability"],
         "",
         "## 相关文件 Top-K",
     ]
@@ -459,8 +844,8 @@ def render_brief(
         ]
     )
     if top:
-        for index, item in enumerate(top, start=1):
-            lines.append(f"{index}. `{item['path']}`")
+        for index, item in enumerate(brief_frame["reading_order"], start=1):
+            lines.append(f"{index}. {item}")
     else:
         lines.append("1. 先回到 issue 补充复现信息，再重新检索。")
 
@@ -468,12 +853,10 @@ def render_brief(
         [
             "",
             "## 可能修改点",
-            "先阅读 Top-K 源文件和对应测试；PatchPath M1 不生成补丁，以下只是证据指向的候选区域。",
         ]
     )
-    for item in top:
-        first = item["evidence"][0]
-        lines.append(f"- `{item['path']}`: matched `{first['term']}` at line {first['line']}.")
+    for item in brief_frame["change_points"]:
+        lines.append(f"- {item}")
 
     lines.extend(
         [
@@ -482,7 +865,7 @@ def render_brief(
             validation or "未检测到明确验证命令；需要阅读项目测试说明或询问 maintainer。",
             "",
             "## 风险点",
-            "- 当前 brief 只基于 issue 文本、本地文件和 `rg` 证据，不证明修复方案正确。",
+            "- 当前 brief 只基于 issue 文本、本地文件、`rg` 和 CodeGraph 证据，不证明修复方案正确。",
             "- 如果本地仓库不是 issue 对应版本，文件定位可能被已合并修改影响。",
         ]
     )
@@ -546,6 +929,7 @@ def write_run(run_dir: Path, brief: str, trace: list[dict[str, Any]]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_env_file()
     parser = argparse.ArgumentParser(prog="patchpath")
     subparsers = parser.add_subparsers(dest="command", required=True)
     analyze_parser = subparsers.add_parser("analyze")
@@ -556,12 +940,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
-        result = analyze(
-            repo=args.repo,
-            issue=args.issue,
-            output_root=args.output_root,
-            offline=args.offline,
-        )
+        try:
+            result = analyze(
+                repo=args.repo,
+                issue=args.issue,
+                output_root=args.output_root,
+                offline=args.offline,
+            )
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         print(f"brief: {result['brief_path']}")
         print(f"trace: {result['trace_path']}")
         return 0

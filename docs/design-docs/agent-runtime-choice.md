@@ -9,26 +9,29 @@ Related spec: `docs/product-specs/mvp.md`
 PatchPath uses an evidence-first workflow agent:
 
 ```text
-Plan -> Retrieve -> Inspect -> Brief -> Guard
+Plan -> Retrieve -> Inspect -> Coach -> Guard
 ```
 
 This is a fixed workflow with LLM judgment at narrow points, not a multi-agent crew.
 
 ## Problem
 
-PatchPath helps contributors who cannot yet quickly understand a real open source issue. The product must generate a contribution brief that answers:
+PatchPath helps developers who cannot yet quickly understand a real open source project and issue. The product must generate a guided contribution training session that combines automatic analysis with coach-style explanation:
 
-- issue one-line explanation
 - project background
+- project structure and entry-point hints
+- issue one-line explanation and breakdown
 - suitability: beginner / medium / not recommended
 - related files Top-K
-- reading order
+- reading order with rationale
 - likely change points
+- likely impact and risk
 - validation command
-- risks
+- test-result interpretation guidance
 - maintainer clarification question or comment draft
+- engineering ability takeaways
 
-The hard part is not producing text. The hard part is proving that the brief came from issue and repository evidence instead of model guesswork.
+The hard part is not producing text. The hard part is proving that the analysis and coaching came from issue and repository evidence instead of model guesswork.
 
 ## Chosen Architecture
 
@@ -38,8 +41,8 @@ Issue Intake
 -> Search Planning
 -> Tool Execution
 -> Evidence Ranking
--> Contribution Brief
--> Brief Guard
+-> Guided Session Brief
+-> Session Guard
 ```
 
 ## Runtime Nodes
@@ -68,7 +71,7 @@ Tools:
 
 ### Problem Framing
 
-Type: LLM judgment
+Type: required LLM judgment
 
 Input:
 
@@ -84,7 +87,7 @@ Output:
 - missing information
 - initial suitability
 
-Rule: this node cannot mention repository files unless they appear in the issue text.
+Rule: this node cannot mention repository files unless they appear in the issue text or traced retrieval evidence. M1 uses DeepSeek for concise project summary, issue summary, clarity, and suitability. `DEEPSEEK_API_KEY` must be provided through `.env` or the environment.
 
 ### Search Planning
 
@@ -116,8 +119,8 @@ Input:
 Output:
 
 - `rg` matches
+- default CodeGraph symbol results
 - heuristic ranking signals
-- optional CodeGraph symbol and relationship results
 - candidate files
 - candidate snippets
 - detected test commands
@@ -126,18 +129,17 @@ Output:
 Tools:
 
 - `rg`
+- CodeGraph CLI
 - filesystem reads
 - `git`
 - package metadata inspection
-- optional CodeGraph CLI or MCP query
 
 Rule: this is the only node that claims file evidence.
 
 V1 state:
 
-- Default path: `rg + heuristics`.
-- Optional enhancement: `rg + CodeGraph` when CodeGraph is installed and the repo has a usable local index.
-- Fallback: if CodeGraph is missing, stale, unsupported, or returns no useful result, continue with `rg + heuristics`.
+- Default path: `rg + CodeGraph + heuristics`.
+- Fallback: if CodeGraph is missing, stale, unsupported, or returns no useful result, continue with `rg + heuristics` and record the fallback reason in trace.
 - Evidence rule: CodeGraph can boost or expand candidate files, but every Top-K recommendation still needs traceable evidence.
 
 ### Evidence Ranking
@@ -158,9 +160,9 @@ Output:
 
 Rule: every recommended file must cite a match, path signal, import signal, test name, or issue mention.
 
-### Contribution Brief
+### Guided Session Brief
 
-Type: LLM writing over evidence
+Type: required LLM writing over evidence
 
 Input:
 
@@ -171,30 +173,38 @@ Input:
 Output:
 
 - project background
+- project structure and entry-point hints
 - issue explanation
 - suitability
 - related files Top-K
-- reading order
+- reading order with coaching rationale
 - likely change points
+- likely impact and risks
 - validation command
-- risks
+- test-result interpretation guidance
 - maintainer comment draft
+- engineering ability takeaways
 
 Rule: recommendations must be grounded in evidence. Unknowns should stay unknown.
 
-### Brief Guard
+M1 implementation note: DeepSeek framing is narrow and required. It writes the
+plain-language intro fields, reading order, likely change points, and coaching
+rationale from retrieved Top-K evidence. Top-K files, validation commands, and
+trace still come from deterministic retrieval and ranking.
+
+### Session Guard
 
 Type: deterministic checks plus small LLM review if needed
 
 Input:
 
-- contribution brief
+- guided session brief
 - evidence list
 - trace
 
 Output:
 
-- accepted brief, or brief with warnings
+- accepted session, or session with warnings
 
 Checks:
 
@@ -217,7 +227,7 @@ RunState
   search_plan
   tool_results
   evidence
-  contribution_brief
+  guided_session_brief
   guard_result
   trace
 ```
@@ -235,7 +245,7 @@ Every run should record:
 - evidence paths
 - warnings
 - provider: `rg`, `heuristics`, or `codegraph`
-- fallback reason when an optional provider is skipped
+- fallback reason when a provider such as CodeGraph is unavailable
 
 Trace file:
 
@@ -248,6 +258,9 @@ Brief file:
 ```text
 .patchpath/runs/<run-id>/brief.md
 ```
+
+The filename stays `brief.md` for the first CLI, but the product meaning is a
+guided contribution training session.
 
 ## Why Not Multi-Agent Crew
 
@@ -285,16 +298,16 @@ Acceptance:
 
 - creates `brief.md`
 - creates `trace.jsonl`
-- brief includes all required sections
+- brief includes automatic analysis and coach guidance sections
 - every Top-K file has evidence
-- retrieval uses `rg + heuristics`, with optional CodeGraph boosting when available
+- retrieval uses `rg + CodeGraph + heuristics`, with a recorded fallback when CodeGraph is unavailable
 - user can decide one next action after reading the brief
 
 ## Re-evaluation Conditions
 
 Revisit this design when:
 
-- five real issues produce useful briefs but the workflow needs branching
+- five real issues produce useful guided sessions but the workflow needs branching
 - tool execution needs long-running state
 - users need a web UI with saved runs
 - automatic patch generation becomes a product goal

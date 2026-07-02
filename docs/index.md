@@ -3,8 +3,8 @@
 ## Current Status
 
 M1 CLI vertical slice verified. Product direction and V1 retrieval design are
-defined; `patchpath analyze` generates `brief.md` and `trace.jsonl` for real
-issues.
+defined; `patchpath analyze` generates a guided contribution training brief and
+`trace.jsonl` for real issues.
 
 ## Core Entry
 
