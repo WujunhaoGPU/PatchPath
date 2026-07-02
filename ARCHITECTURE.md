@@ -7,7 +7,7 @@ Given a GitHub repo and issue, produce an evidence-backed contribution brief for
 ## Planned Layers
 
 - `ingestion`: fetch issue, comments, repo metadata, and local repository files.
-- `retrieval`: find candidate files and snippets with `rg + heuristics`, then optionally boost with CodeGraph symbol evidence.
+- `retrieval`: find candidate files and snippets with `rg`, boost symbol-like evidence with CodeGraph by default, then rank with heuristics.
 - `evidence`: store snippets, file paths, ranking reasons, and trace entries.
 - `analysis`: summarize issue state, missing information, risks, and contribution path.
 - `guard`: reject or warn on unsupported recommendations.
@@ -22,7 +22,7 @@ PatchPath uses an evidence-first workflow agent:
 Plan -> Retrieve -> Inspect -> Brief -> Guard
 ```
 
-This is a fixed workflow, not a multi-agent crew. LLM calls are limited to problem framing, search planning, contribution brief writing, and optional guard review. File evidence must come from deterministic tools such as `rg`, filesystem reads, `git`, GitHub metadata, package metadata, and optional CodeGraph queries.
+This is a fixed workflow, not a multi-agent crew. LLM calls are limited to problem framing, search planning, contribution brief writing, and optional guard review. File evidence must come from deterministic tools such as `rg`, CodeGraph, filesystem reads, `git`, GitHub metadata, and package metadata.
 
 ## Dependency Direction
 
@@ -39,18 +39,18 @@ analysis -> evaluation
 ```text
 repo + issue
 -> fetch issue metadata
--> frame the problem
 -> plan search
--> retrieve and inspect candidate files
+-> retrieve text evidence with rg
+-> retrieve structure evidence with CodeGraph
 -> rank evidence
--> build contribution brief
+-> frame and write brief fields with DeepSeek
 -> guard unsupported claims
 -> record trace and brief
 ```
 
 ## Current Architecture Status
 
-Status: runtime architecture accepted and M1 CLI implemented. V1 Tool Execution state is `rg + heuristics` as the default path, with `rg + CodeGraph` as an optional enhancement when a local CodeGraph index is available.
+Status: runtime architecture accepted and M1 CLI implemented. V1 Tool Execution state is `rg + CodeGraph + heuristics` as the default path. CodeGraph initializes and queries the target repo by default, then falls back to `rg + heuristics` if CodeGraph is unavailable. DeepSeek is required for concise brief framing through `DEEPSEEK_API_KEY`; missing or failing LLM calls fail the run instead of generating a template brief.
 
 ## First Validation
 

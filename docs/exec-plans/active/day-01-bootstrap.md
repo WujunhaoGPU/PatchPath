@@ -24,7 +24,7 @@ Create the repository skeleton and lock the product positioning before implement
 - [x] Add project map and repository rules.
 - [x] Accept the first Agent runtime architecture.
 - [x] Create `docs/eval-set-v0.md` with 5 real issues.
-- [x] Accept Tool Execution V1 retrieval strategy: default `rg + heuristics`, optional `rg + CodeGraph`.
+- [x] Accept Tool Execution V1 retrieval strategy; current default is `rg + CodeGraph + heuristics`.
 - [x] Build the first CLI proof for one issue.
 - [x] Create lightweight review notes from the first generated brief.
 

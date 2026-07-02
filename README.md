@@ -88,7 +88,7 @@ Status: M1 CLI vertical slice verified
 
 - 接受 `Plan -> Retrieve -> Inspect -> Brief -> Guard` Agent runtime。
 - 建立 `docs/eval-set-v0.md`，包含 5 个 `pallets/click` gold issues。
-- 完成 Tool Execution retrieval 实验：V1 默认 `rg + heuristics`，CodeGraph 作为 optional provider。
+- 完成 Tool Execution retrieval 实验，并将 V1 默认检索更新为 `rg + CodeGraph + heuristics`。
 - 实现最小 CLI：
 
 ```text
@@ -96,6 +96,9 @@ patchpath analyze --repo <repo-url-or-path> --issue <issue-url-or-number>
 ```
 
 - 在本地 `pallets/click` checkout 上跑通 5 个真实 issue，5/5 gold source files 进入 Top-5。
+- brief 的前四个说明字段必须由 DeepSeek 生成；没有 `DEEPSEEK_API_KEY` 时命令会失败。
+- CodeGraph 现在是默认检索增强：CLI 会在目标仓库初始化/查询 CodeGraph，并把结构命中写入 trace。
+- 推荐阅读顺序和可能修改点由 LLM 基于 Top-K 文件与 evidence 改写。
 
 下一步是增加跨仓库 eval，不要先扩大到自动 patch 或 Web UI。
 
@@ -118,6 +121,14 @@ Setup:
 ```bash
 uv sync --extra dev
 source .venv/bin/activate
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+DEEPSEEK_API_KEY=<your-key>
+PATCHPATH_LLM_MODEL=deepseek-v4-flash
 ```
 
 Checks:
@@ -127,3 +138,11 @@ Checks:
 pytest
 patchpath analyze --repo ../click --issue pallets/click#3502
 ```
+
+`.env` is git-ignored. The LLM only writes concise Chinese descriptions for
+project summary, issue summary, clarity, suitability, reading order, and likely
+change points. File recommendations still come from traced `rg + CodeGraph +
+heuristics` evidence.
+
+CodeGraph writes `.codegraph/` in the analyzed target repository; that directory
+is git-ignored here and should not be committed.

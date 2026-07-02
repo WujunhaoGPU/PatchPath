@@ -14,8 +14,9 @@ patchpath analyze --repo <local-repo-path> --issue <github-issue-url-or-owner/re
 
 ## Main Modules
 
-- `src/patchpath/cli.py`: M1 CLI, issue intake, `rg + heuristics` retrieval,
-  brief rendering, and JSONL trace writing.
+- `src/patchpath/cli.py`: M1 CLI, issue intake, default `rg + CodeGraph +
+  heuristics` retrieval, required DeepSeek brief framing, brief rendering, and
+  JSONL trace writing.
 - `tests/test_m1_cli.py`: minimal M1 behavior checks.
 
 ## Common Commands
@@ -25,6 +26,14 @@ patchpath analyze --repo <local-repo-path> --issue <github-issue-url-or-owner/re
 pytest
 patchpath analyze --repo <local-repo-path> --issue <owner/repo#number>
 ```
+
+LLM config:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and set `DEEPSEEK_API_KEY`.
 
 ## Test And Acceptance Commands
 
@@ -45,6 +54,8 @@ patchpath analyze --repo ../click --issue pallets/click#3502
 
 - Building an auto-PR bot too early would move the product into a crowded and harder-to-verify space.
 - LLM output without citations would be hard for contributors to trust.
+- LLM framing must not recommend files that are absent from trace evidence.
+- CodeGraph may create `.codegraph/` in the analyzed target repository; do not commit it.
 - Eval must start with real issue samples, not synthetic examples.
 
 ## Next Handoff

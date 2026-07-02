@@ -68,7 +68,7 @@ Tools:
 
 ### Problem Framing
 
-Type: LLM judgment
+Type: required LLM judgment
 
 Input:
 
@@ -84,7 +84,7 @@ Output:
 - missing information
 - initial suitability
 
-Rule: this node cannot mention repository files unless they appear in the issue text.
+Rule: this node cannot mention repository files unless they appear in the issue text or traced retrieval evidence. M1 uses DeepSeek for concise project summary, issue summary, clarity, and suitability. `DEEPSEEK_API_KEY` must be provided through `.env` or the environment.
 
 ### Search Planning
 
@@ -116,8 +116,8 @@ Input:
 Output:
 
 - `rg` matches
+- default CodeGraph symbol results
 - heuristic ranking signals
-- optional CodeGraph symbol and relationship results
 - candidate files
 - candidate snippets
 - detected test commands
@@ -126,18 +126,17 @@ Output:
 Tools:
 
 - `rg`
+- CodeGraph CLI
 - filesystem reads
 - `git`
 - package metadata inspection
-- optional CodeGraph CLI or MCP query
 
 Rule: this is the only node that claims file evidence.
 
 V1 state:
 
-- Default path: `rg + heuristics`.
-- Optional enhancement: `rg + CodeGraph` when CodeGraph is installed and the repo has a usable local index.
-- Fallback: if CodeGraph is missing, stale, unsupported, or returns no useful result, continue with `rg + heuristics`.
+- Default path: `rg + CodeGraph + heuristics`.
+- Fallback: if CodeGraph is missing, stale, unsupported, or returns no useful result, continue with `rg + heuristics` and record the fallback reason in trace.
 - Evidence rule: CodeGraph can boost or expand candidate files, but every Top-K recommendation still needs traceable evidence.
 
 ### Evidence Ranking
@@ -160,7 +159,7 @@ Rule: every recommended file must cite a match, path signal, import signal, test
 
 ### Contribution Brief
 
-Type: LLM writing over evidence
+Type: required LLM writing over evidence
 
 Input:
 
@@ -181,6 +180,11 @@ Output:
 - maintainer comment draft
 
 Rule: recommendations must be grounded in evidence. Unknowns should stay unknown.
+
+M1 implementation note: DeepSeek framing is narrow and required. It writes the
+plain-language intro fields, reading order, and likely change points from
+retrieved Top-K evidence. Top-K files, validation commands, and trace still come
+from deterministic retrieval and ranking.
 
 ### Brief Guard
 
@@ -235,7 +239,7 @@ Every run should record:
 - evidence paths
 - warnings
 - provider: `rg`, `heuristics`, or `codegraph`
-- fallback reason when an optional provider is skipped
+- fallback reason when a provider such as CodeGraph is unavailable
 
 Trace file:
 
@@ -287,7 +291,7 @@ Acceptance:
 - creates `trace.jsonl`
 - brief includes all required sections
 - every Top-K file has evidence
-- retrieval uses `rg + heuristics`, with optional CodeGraph boosting when available
+- retrieval uses `rg + CodeGraph + heuristics`, with a recorded fallback when CodeGraph is unavailable
 - user can decide one next action after reading the brief
 
 ## Re-evaluation Conditions
